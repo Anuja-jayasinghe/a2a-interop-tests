@@ -1,0 +1,14 @@
+[package]
+org = "anuja_j"
+name = "a2a_interop_tests"
+version = "0.1.0"
+distribution = "2201.13.4"
+
+[build-options]
+observabilityIncluded = true
+
+[[dependency]]
+org = "ballerina"
+name = "a2a"
+version = "0.1.0"
+repository = "local"
