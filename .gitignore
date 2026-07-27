@@ -9,3 +9,6 @@ generated/
 # Contains configuration values used during development time.
 # See https://ballerina.io/learn/provide-values-to-configurable-variables/ for more details.
 Config.toml
+
+# Local Claude Code guidance, not part of the repo's tracked content.
+CLAUDE.md
