@@ -162,3 +162,13 @@ extended to auto-detect a server's protocol version from its `AgentCard`
 and translate v0.3 wire shapes into the same `Task`/`Message`/`Role`/
 `TaskState`/`StreamResponse` types it already returns for v1.0 servers —
 callers write identical code either way.
+
+## 6. Resolved
+
+`ballerina/a2a`'s Client now auto-detects this agent's v0.3 dialect from
+its AgentCard and translates transparently — confirmed via
+`tests/currency_agent_interop_test.bal` (`testCurrencyAgentSendMessage`,
+`testCurrencyAgentSendMessageStream`), both passing against the real
+running agent. See `a2a-ballerina`'s
+`a2a/docs/superpowers/specs/2026-07-28-v03-client-compat-design.md` for
+the implementation.
