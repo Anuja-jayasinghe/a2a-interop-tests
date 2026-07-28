@@ -12,13 +12,27 @@ set it up from a checkout of `a2a-samples` alongside this one.
 
 ## Quick start
 
-```bash
-cd path/to/a2a-samples/samples/python/agents/adk_currency_agent
-uv sync
-export ENV=development
-export GOOGLE_API_KEY="your-google-api-key"
-uv run currency_agent
-```
+1. Copy the env template and fill in your key (this file, `.env`, is
+   git-ignored — it never gets committed):
+
+   ```bash
+   cd servers/adk_currency_agent
+   cp .env.example .env
+   # edit .env, set GOOGLE_API_KEY to a real key with Gemini access
+   ```
+
+2. Install dependencies and run the server, loading `.env`:
+
+   ```bash
+   cd path/to/a2a-samples/samples/python/agents/adk_currency_agent
+   uv sync
+   set -a && source path/to/a2a-interop-tests/servers/adk_currency_agent/.env && set +a
+   uv run currency_agent
+   ```
+
+   (`set -a` exports every variable `source` picks up, so `ENV` and
+   `GOOGLE_API_KEY` both land in the process environment without editing
+   the file's syntax — it's a plain `KEY=value` file, not a shell script.)
 
 Listens on `http://localhost:10999`.
 
