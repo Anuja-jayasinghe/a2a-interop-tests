@@ -20,6 +20,10 @@ run against real third-party A2A servers rather than mocks.
 
 ## Layout
 
+- **[`DEMO_GUIDE.md`](DEMO_GUIDE.md)** — start here to actually run and
+  demo this repo's scenario end to end: setting up both reference agents,
+  running the real interop tests, running the interactive demo, and a
+  suggested narrative for presenting it.
 - `tests/` — the interop test suite (Ballerina project at repo root),
   run with a real server via `A2A_TEST_SERVER_URL`.
 - `demo/` — an interactive, watchable walkthrough of the `Client` against

@@ -30,6 +30,7 @@ scope = "testOnly"
 dependencies = [
 	{org = "ballerina", name = "http"},
 	{org = "ballerina", name = "io"},
+	{org = "ballerina", name = "lang.array"},
 	{org = "ballerina", name = "lang.runtime"},
 	{org = "ballerina", name = "os"},
 	{org = "ballerina", name = "time"},
