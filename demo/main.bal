@@ -21,10 +21,9 @@ public function main() returns error? {
     io:println("Name:        ", card.name);
     io:println("Description: ", card.description);
     io:println("Capabilities:");
-    io:println("  streaming:              ", card.capabilities.streaming);
-    io:println("  pushNotifications:      ", card.capabilities.pushNotifications);
-    io:println("  stateTransitionHistory: ", card.capabilities.stateTransitionHistory);
-    io:println("  extendedAgentCard:      ", card.capabilities.extendedAgentCard);
+    io:println("  streaming:         ", card.capabilities.streaming);
+    io:println("  pushNotifications: ", card.capabilities.pushNotifications);
+    io:println("  extendedAgentCard: ", card.capabilities.extendedAgentCard);
     io:println();
 
     // Passing the resolved card lets the Client auto-detect whether this
