@@ -195,3 +195,31 @@ function testInteropSubscribeToTaskOnTerminalTask() returns error? {
     test:assertTrue(subscribed is a2a:A2AError, "should now be a typed A2AError, not a raw http-layer error");
     test:assertTrue(subscribed is a2a:A2AInternalError, "code -32602 has no dedicated subtype, so it maps to A2AInternalError");
 }
+
+# Determines empirically whether helloworld's capabilities.extendedAgentCard
+# flag (observed true in earlier interop work) means getExtendedAgentCard
+# is genuinely implemented, or just declared. See findings.md for the
+# result either way -- this is exploratory verification, not a test with a
+# single predetermined correct outcome.
+#
+# + return - an error if any step other than the assertions themselves fails
+@test:Config {groups: ["interop"]}
+function testInteropGetExtendedAgentCard() returns error? {
+    if !isRealServerConfigured() {
+        logSkip("testInteropGetExtendedAgentCard");
+        return;
+    }
+
+    a2a:Client c = check new (getServerBaseUrl());
+
+    a2a:AgentCard|error result = c->getExtendedAgentCard();
+
+    if result is error {
+        io:println("  [getExtendedAgentCard] not supported by this server: ", result.message());
+        return;
+    }
+
+    a2a:AgentCard card = result;
+    io:println("  [getExtendedAgentCard] supported — name: ", card.name);
+    test:assertTrue(card.name.length() > 0, "an extended card, if returned, should at least have a name");
+}
