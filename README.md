@@ -20,6 +20,9 @@ run against real third-party A2A servers rather than mocks.
 
 ## Layout
 
+- **[`REPO_MAP.md`](REPO_MAP.md)** — full guide to how this repo and
+  `a2a-ballerina` relate, what's in each, and how the client's A2A v0.3
+  compatibility actually works end to end. Read this for orientation.
 - **[`DEMO_GUIDE.md`](DEMO_GUIDE.md)** — start here to actually run and
   demo this repo's scenario end to end: setting up both reference agents,
   running the real interop tests, running the interactive demo, and a
