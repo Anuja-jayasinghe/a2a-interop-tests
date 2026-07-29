@@ -1,12 +1,23 @@
 import ballerina/a2a;
 import ballerina/io;
+import ballerina/os;
 import ballerina/uuid;
 
-const string SERVER_URL = "http://127.0.0.1:9999";
+// Defaults to helloworld (v1.0). Point this at a different agent (e.g.
+// adk_currency_agent on http://localhost:10999, which speaks A2A v0.3) by
+// setting A2A_DEMO_SERVER_URL -- the client's protocol-version
+// auto-detection (below) makes this demo work identically either way,
+// with no code branching on which dialect the server speaks.
+isolated function serverUrl() returns string {
+    string envUrl = os:getEnv("A2A_DEMO_SERVER_URL");
+    return envUrl != "" ? envUrl : "http://127.0.0.1:9999";
+}
 
 public function main() returns error? {
+    string url = serverUrl();
+
     io:println("=== Step 1: resolveAgentCard ===");
-    a2a:AgentCard card = check a2a:resolveAgentCard(SERVER_URL);
+    a2a:AgentCard card = check a2a:resolveAgentCard(url);
     io:println("Name:        ", card.name);
     io:println("Description: ", card.description);
     io:println("Capabilities:");
@@ -16,7 +27,12 @@ public function main() returns error? {
     io:println("  extendedAgentCard:      ", card.capabilities.extendedAgentCard);
     io:println();
 
-    a2a:Client agentClient = check new (SERVER_URL);
+    // Passing the resolved card lets the Client auto-detect whether this
+    // agent speaks A2A v1.0 or the older v0.3 dialect (see
+    // ballerina/a2a's compat_v03.bal) and translate transparently --
+    // everything below this line is identical regardless of which server
+    // is configured.
+    a2a:Client agentClient = check new (url, agentCard = card);
 
     io:println("=== Step 2: sendMessage ===");
     string firstText = "Say hello.";
