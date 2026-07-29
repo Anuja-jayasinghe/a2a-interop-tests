@@ -123,17 +123,21 @@ This walks through `resolveAgentCard`, one `sendMessage`, one
 `sendMessageStream` (printing events live), then an interactive loop —
 type a line, press Enter, see it streamed back; `quit` to exit.
 
-**Note on scope**: `demo/main.bal` currently points at `helloworld`
-(`http://127.0.0.1:9999`) and doesn't pass an `AgentCard` into the `Client`,
-so it always runs in v1.0 mode. It demonstrates the client's core
-capabilities, not the v0.3 compatibility layer specifically — that's what
-step 4's `adk_currency_agent` interop tests are for. If you want to *watch*
-the v0.3 path work interactively rather than just see it pass in a test
-runner, that's a natural follow-up: point a copy of `demo/main.bal` at
-`http://localhost:10999` and pass `agentCard = check a2a:resolveAgentCard(SERVER_URL)`
-into the `Client` constructor (mirroring what
-`tests/currency_agent_interop_test.bal` already does) — the same demo
-script would then work against either agent unmodified everywhere else.
+**Works against either agent, unmodified.** `demo/main.bal` defaults to
+`helloworld` (`http://127.0.0.1:9999`, v1.0), but reads
+`A2A_DEMO_SERVER_URL` if set and always passes the resolved `AgentCard`
+into the `Client` constructor — so protocol-version auto-detection just
+happens, the same way it does in `tests/currency_agent_interop_test.bal`.
+To watch the v0.3 path work interactively rather than just see it pass in
+a test runner:
+
+```bash
+cd demo
+A2A_DEMO_SERVER_URL=http://localhost:10999 bal run
+```
+
+Same script, same output format, no code branching — the only difference
+is which agent card gets resolved first.
 
 ## 6. Suggested demo narrative
 

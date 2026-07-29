@@ -82,7 +82,7 @@ Root: `C:\gitProject\a2a-interop-tests`.
 | `FINDINGS.md` | Master index: one line per agent tested, linking to its full writeup. |
 | `LEARNING_LOG.md` | Interop-specific lessons (e.g. "reference implementations deviate from spec, verify everything empirically"). |
 | `tests/` | The real interop test suite (its own Ballerina project). `interop_test.bal` (5 tests against `helloworld`), `currency_agent_interop_test.bal` (2 tests against `adk_currency_agent`), `testutil.bal` (shared helpers — `getServerBaseUrl`, `assertValidTask`, `extractArtifactText`). Every test no-ops with a visible `SKIPPED` marker unless its env var is set — nothing here silently skips without saying so. |
-| `demo/` | A separate Ballerina project: an interactive, watchable walkthrough of `Client` — discovery, one-shot `sendMessage`, streaming `sendMessageStream`, then a type-and-see interactive loop. Currently wired to `helloworld` (v1.0) only. |
+| `demo/` | A separate Ballerina project: an interactive, watchable walkthrough of `Client` — discovery, one-shot `sendMessage`, streaming `sendMessageStream`, then a type-and-see interactive loop. Defaults to `helloworld` (v1.0), but reads `A2A_DEMO_SERVER_URL` and passes the resolved `AgentCard` into `Client`, so it works identically against `adk_currency_agent` (v0.3) too — same code, no branching. |
 | `servers/helloworld/` | `setup.md` (venv/run instructions, no credentials needed) + `findings.md` (the v1.0 non-conformances found: missing `AgentCard.url`, PascalCase methods, wrapped `SendMessage` response, `subscribeToTask`'s two-fold non-conformance on terminal tasks). |
 | `servers/adk_currency_agent/` | `setup.md` + `findings.md` (the discovery that this agent speaks **v0.3**, not v1.0 — raw wire evidence included) + `.env`/`.env.example` (Gemini API key, git-ignored — never committed). |
 
@@ -158,28 +158,32 @@ reference SDK's own conversion code that `final` is purely derived from
 
 ## 6. Known gaps / good next steps
 
-Real, deliberately-deferred findings from the final review — none block
-what's already merged, but worth knowing about:
+Findings from the final review — resolved items are kept here as a
+record of what was closed and how; the one genuine open item is called
+out at the end.
 
-1. **`tenant` routing** is still sent to v0.3 servers unconditionally.
-   It's a v1.0-only concept; harmless against lenient servers, a possible
-   400 against a strict one.
-2. **The design spec predates the outbound-encoding half** of the work —
-   it documents inbound decoding thoroughly (that's all the original plan
-   covered) but the encode functions were added later, in response to what
-   the live interop test surfaced, and the spec was never updated to match.
-3. **Two wire-shape assumptions remain unverified against a live server**:
-   `TaskPushNotificationConfig`'s exact v0.3 field names, and whether
-   `Message.referenceTaskIds`/`extensions`/`Artifact.extensions` carry
-   identical field names on the wire. Both extrapolate from the pattern
-   every other field in this file follows; neither has been exercised by
-   an actual server response.
-4. **`demo/` only targets `helloworld`** — pointing a copy of it at
-   `adk_currency_agent` (passing `agentCard` into the `Client`
-   constructor, mirroring `tests/currency_agent_interop_test.bal`) would
-   let the v0.3 path be watched interactively, not just proven by a test
-   runner.
-5. **No round-trip property test** (`parseV03Message(encodeV03Message(m))
-   == m` across all field combinations) exists yet — the cheapest ongoing
-   guard against the encode and decode halves silently drifting apart as
-   either one changes in the future.
+1. ~~**`tenant` routing** was sent to v0.3 servers unconditionally.~~
+   **Resolved** — `Client` now omits it in `V0_3` mode
+   (`a2a-ballerina` `chore/close-v03-gaps`), with a regression test proving
+   it's absent from the wire body.
+2. ~~**The design spec predated the outbound-encoding half** of the
+   work.~~ **Resolved** — the spec now documents `encodeV03Message`/
+   `encodeV03Part`/`encodeV03SendConfiguration`/`encodeV03Role` alongside
+   the inbound decode functions it already covered.
+3. **Two wire-shape assumptions remain unverified against a live server**
+   — still open, and likely to stay that way without a third reference
+   agent: `TaskPushNotificationConfig`'s exact v0.3 field names, and
+   whether `Message.referenceTaskIds`/`extensions`/`Artifact.extensions`
+   carry identical field names on the wire. Both extrapolate from the
+   pattern every other field in this file follows; neither `helloworld`
+   nor `adk_currency_agent` exercises push notifications or cross-task
+   references, so closing this for real needs a different reference agent
+   that actually uses one of those features.
+4. ~~**`demo/` only targeted `helloworld`**.~~ **Resolved** —
+   `demo/main.bal` now reads `A2A_DEMO_SERVER_URL` and always passes the
+   resolved `AgentCard` into `Client`; verified interactively against both
+   agents, same script, no branching. See
+   [`DEMO_GUIDE.md`](DEMO_GUIDE.md) §4.
+5. ~~**No round-trip property test** existed.~~ **Resolved** —
+   `parseV03Message(check encodeV03Message(m)) == m`, covering every Part
+   variant plus a minimal-message case, added to `compat_v03_test.bal`.
