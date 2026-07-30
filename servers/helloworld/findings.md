@@ -149,6 +149,31 @@ streaming event shape, the design doc (and this client) side with what
 the live server actually sends — the guide's examples are the imprecise
 ones here.
 
+## 7. `getExtendedAgentCard` is genuinely supported, not just declared
+
+The server's agent card declares `capabilities.extendedAgentCard: true`.
+Rather than assuming that flag is accurate, `testInteropGetExtendedAgentCard`
+(`tests/interop_test.bal`) calls `getExtendedAgentCard` against the live
+server to check. Result: it is genuinely implemented, not just declared —
+the call succeeds and returns a real, distinct `AgentCard` named
+`"Hello World Agent - Extended Edition"` (as opposed to the public card's
+plain `"Hello World Agent"`). Confirmed by running:
+
+```
+A2A_TEST_SERVER_URL=http://127.0.0.1:9999 bal test --groups interop
+```
+
+with the console output showing:
+
+```
+  [getExtendedAgentCard] supported — name: Hello World Agent - Extended Edition
+```
+
+This is the only one of the six operations added alongside this test
+(`getExtendedAgentCard`, the four push-notification-config CRUD methods,
+and `listTasks`) with a real reference agent to verify against; the
+other five remain unverified against any live server.
+
 ## Operation-to-wire mapping (as verified)
 
 | Client method | JSON-RPC method | HTTP | Response type |
@@ -159,3 +184,4 @@ ones here.
 | getTask | GetTask | POST | application/json |
 | cancelTask | CancelTask | POST | application/json |
 | subscribeToTask | SubscribeToTask | POST | text/event-stream |
+| getExtendedAgentCard | GetExtendedAgentCard | POST | application/json |
