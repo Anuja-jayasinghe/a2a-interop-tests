@@ -179,7 +179,50 @@ requires. **Not fixed here** — this is a real non-conformance in the
 upstream reference SDK, and the client's strict rejection of it is the
 correct, spec-compliant behavior, not a bug to route around.
 
-## 6. Confirmed via the real `ballerina/a2a` client, not just curl
+## 6. Transient tool-call timeouts under concurrent load surface as `INPUT_REQUIRED`, not `FAILED`
+
+Running the full interop suite (5 langgraph tests, each making a real
+Claude + Frankfurter round trip, plus a preceding manual cancel demo against
+the same server process) occasionally produced two unexpected failures:
+`testLangGraphAgentSendMessage` and
+`testLangGraphAgentInputRequiredThenMultiTurn` asserted
+`TASK_STATE_COMPLETED` but got `TASK_STATE_INPUT_REQUIRED` for a plain,
+unambiguous "What is the exchange rate between USD and GBP?" query.
+
+Reproducing the exact request directly (bypassing the test framework)
+showed the model's real reply was not a clarification at all:
+
+```json
+{"result":{"status":{"state":"input-required","message":{"parts":[{"text":
+"I apologize, but I'm currently unable to retrieve the exchange rate
+between USD and GBP due to a technical issue with the exchange rate
+service (connection timeout). ..."}]}}}}
+```
+
+`get_exchange_rate`'s `httpx.get()` call had no explicit timeout (httpx's
+bare 5s default applied) and no retry, so a transient delay against the
+live Frankfurter API — plausible under the concurrent load of five real
+tests hitting the same single-threaded event loop back to back — surfaced
+as a tool error. Separately, `agent.py`'s `get_agent_response` maps
+`ResponseFormat.status == 'error'` to the exact same `require_user_input:
+True` branch as `'input_required'` (there's no distinct `TaskState.failed`
+path in `agent_executor.py` either), so *any* transient tool failure is
+indistinguishable from a genuine clarification request to the A2A client.
+Direct probing (a single request, then 5 concurrent requests) against the
+live Frankfurter API and through the agent both succeeded reliably outside
+the full test run, confirming the API itself isn't unreliable — this is
+about the tool call's own timeout/retry margin being too thin.
+
+**Fix**: give `get_exchange_rate` an explicit 10s timeout and one retry
+before giving up. Re-running the full interop suite afterward passed
+cleanly (12 passing, 1 failing — the already-documented §5 delete
+non-conformance, nothing else). The `status == 'error'` → `INPUT_REQUIRED`
+mapping itself was left as-is — that's the sample's existing (if
+debatable) design choice for how the agent recovers conversationally from
+tool errors, not a bug introduced by this repo's patches, and not
+something to route around here.
+
+## 7. Confirmed via the real `ballerina/a2a` client, not just curl
 
 `tests/langgraph_agent_interop_test.bal`, run with
 `A2A_LANGGRAPH_AGENT_URL=http://localhost:10000`:

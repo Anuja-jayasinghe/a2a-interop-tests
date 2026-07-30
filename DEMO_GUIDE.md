@@ -28,7 +28,12 @@ check, this is it.
 | :---- | :---- | :--- | :--- | :---- |
 | **`langgraph` currency agent** (Python/LangGraph, `a2a-samples`, on Claude) | v0.3 | `:10000` | Anthropic API key | **Recommended — full-coverage agent.** Genuine in-flight `cancelTask`/`subscribeToTask`, genuine `INPUT_REQUIRED` + multi-turn continuation, genuine push-notification config CRUD, plus everything the other two prove |
 | `helloworld` (Python, `a2a-samples`) | v1.0 | `:9999` | none | The client's native dialect, simplest/fastest sanity check — discovery, `sendMessage`, `sendMessageStream`, `getTask`, `getExtendedAgentCard` |
-| `adk_currency_agent` (Python/Google ADK, `a2a-samples`) | v0.3 | `:10999` | Google or Anthropic API key | A second, independent v0.3 dialect example — proves the client's auto-detection/translation isn't tuned to one specific agent |
+| `adk_currency_agent` (Python/Google ADK, `a2a-samples`, on Claude) | v0.3 | `:10999` | Anthropic API key (Gemini also works — see §3) | A second, independent v0.3 dialect example — proves the client's auto-detection/translation isn't tuned to one specific agent |
+
+Both currency agents in this repo are configured to run on **Claude** by
+default — one Anthropic key covers everything. Gemini still works for
+`adk_currency_agent` if you'd rather use that; §3 covers exactly what to
+change.
 
 Run `helloworld` first if you just want the fastest possible sanity check
 that the client works at all (no credentials, no LLM latency). Run
@@ -42,12 +47,11 @@ for everything else — it is the one this guide leads with below.
 - **Python 3.10+** and **[`uv`](https://github.com/astral-sh/uv)** — needed
   to run any of the reference agents locally.
 - **An Anthropic API key** (get one at
-  https://console.anthropic.com/settings/keys) — needed for the `langgraph`
-  agent (the recommended one) and optionally for `adk_currency_agent`.
-  **A Google API key with Gemini access** is an alternative for
-  `adk_currency_agent` only, but its free tier is easy to exhaust (see §7)
-  — Anthropic billing sidesteps that. `helloworld` needs no external
-  credentials at all.
+  https://console.anthropic.com/settings/keys) — needed for both
+  `langgraph` and `adk_currency_agent`, both configured to run on Claude by
+  default in this repo. `helloworld` needs no external credentials at all.
+  If you'd rather use Gemini for `adk_currency_agent`, see §3's "Using
+  Gemini instead" — its free tier is easy to exhaust though (see §7).
 - A local checkout of
   [`a2a-samples`](https://github.com/a2aproject/a2a-samples) alongside this
   repo — none of the reference agents are vendored in here.
@@ -77,6 +81,12 @@ Both `tests/Ballerina.toml` and `demo/Ballerina.toml` already declare
 needed on this repo's side.
 
 ## 3. Set up each agent
+
+**Every agent below is a Python project — start it with `uv run ...` (or
+`python __main__.py` for `helloworld`), never `bal run`.** `bal` is the
+Ballerina CLI; it never runs inside an agent's own directory — it's only
+used later, from this repo's root, for the client-side tests (§4) and demo
+(§5).
 
 ### `langgraph` currency agent (v0.3, on Claude) — recommended, start here
 
@@ -186,31 +196,75 @@ cd path\to\a2a-samples\samples\python\agents\helloworld
 
 Full details: [`servers/helloworld/setup.md`](servers/helloworld/setup.md).
 
-### `adk_currency_agent` (v0.3, needs a Gemini API key)
+### `adk_currency_agent` (v0.3, on Claude)
+
+This agent is Google-ADK-based, but ADK has pluggable model backends and
+this repo runs it on Claude by default — one Anthropic key covers both
+currency agents. Three changes make that work in
+`path\to\a2a-samples\samples\python\agents\adk_currency_agent` (already
+applied if you're working from this repo's own checkout; needed from a
+fresh `a2a-samples` clone):
+
+1. Add `anthropic` to `pyproject.toml`'s `dependencies`, then `uv sync`.
+2. In `src/currency_agent/agent.py`, set the model:
+
+   ```python
+   from google.adk.models.anthropic_llm import AnthropicLlm
+   # ...
+   model=AnthropicLlm(model='claude-opus-4-8'),
+   ```
+
+   **Use `AnthropicLlm`, not the similarly-named `Claude` class** — `Claude`
+   is the Vertex-AI-hosted variant and requires `GOOGLE_CLOUD_PROJECT`/
+   `GOOGLE_CLOUD_LOCATION`; it will raise `ValueError: GOOGLE_CLOUD_PROJECT
+   and GOOGLE_CLOUD_LOCATION must be set for using Anthropic on Vertex.`
+   if you reach for it by mistake. `AnthropicLlm` is the direct-API class —
+   it just needs `ANTHROPIC_API_KEY`.
+3. **Known ADK bug — wrap every tool's return value in `{"result": ...}`.**
+   ADK's Anthropic tool-result serializer
+   (`google/adk/models/anthropic_llm.py`, around line 100) only extracts
+   content when the tool's return dict has a top-level `"content"` or
+   `"result"` key. `get_latest_rates` and the other tools in `agent.py`
+   return the raw Frankfurter JSON dict with neither key, so Claude
+   silently receives an **empty** tool result every time and gives up
+   claiming "the rate service isn't returning data" — even though the
+   HTTP call actually succeeded. Fix: change each tool's final
+   `return response.json()` to `return {'result': response.json()}`.
+4. Add a system instruction enforcing the exact JSON response shape — ADK
+   passes `output_schema=AgentResponse` through to Gemini as an enforced
+   schema, but **not** to Claude, so without this Claude has no schema
+   pressure and could reply with something
+   `AgentResponse.model_validate_json` can't parse. Append to the agent's
+   `instruction`:
+
+   ```python
+   ' Always respond with ONLY a JSON object matching this exact shape, no other text: '
+   '{"message": "<your reply text>", "status": "completed" | "input-required" | "failed"}. '
+   'Use "completed" once the conversion has been answered, "input-required" when you need '
+   'the user to supply more information (e.g. a missing target currency), and "failed" only '
+   'if a tool call errored.'
+   ```
+
+Then bring it up:
 
 ```bat
 cd servers\adk_currency_agent
 copy .env.example .env
 notepad .env
-:: set GOOGLE_API_KEY to a real key with Gemini access, save, close
+:: set ANTHROPIC_API_KEY to a real key, save, close
 
 cd path\to\a2a-samples\samples\python\agents\adk_currency_agent
 uv sync
-set GOOGLE_API_KEY=<paste the same key you put in .env>
+set ANTHROPIC_API_KEY=<paste the same key you put in .env>
 uv run currency_agent
 ```
 
 `cmd.exe` has no `source`/`.env`-loading built in, so the key has to be set
-directly with `set` in the same window before `uv run` — copy the value out
-of `.env` by hand. (If you're scripting this instead of typing it
-interactively, a one-liner that reads `.env` for you:
-`for /f "tokens=1,2 delims==" %A in (servers\adk_currency_agent\.env) do set %A=%B`
-— run from this repo's root, and skip lines starting with `#` if you add
-comments to the file.)
-
-Listens on `http://localhost:10999`. Leave it running in its own terminal.
-The `.env` file is git-ignored — your key never gets committed. Full
-details: [`servers/adk_currency_agent/setup.md`](servers/adk_currency_agent/setup.md).
+directly with `set` in the same window before `uv run` — copy the value
+out of `.env` by hand. Listens on `http://localhost:10999`. Leave it
+running in its own terminal. The `.env` file is git-ignored — your key
+never gets committed. Full details:
+[`servers/adk_currency_agent/setup.md`](servers/adk_currency_agent/setup.md).
 
 **Sanity-check both are up** before moving on:
 
@@ -225,74 +279,17 @@ work exists. See
 [`servers/adk_currency_agent/findings.md`](servers/adk_currency_agent/findings.md)
 for the full wire-level evidence.
 
-### Optional: run `adk_currency_agent` on Claude instead of Gemini
+### Using Gemini instead (either currency agent)
 
-The agent doesn't have to run on Gemini — Google ADK (which it's built on)
-has pluggable model backends, and this repo has actually verified an
-Anthropic-backed run end to end. This is useful when Gemini's free tier is
-exhausted (see §7's troubleshooting entry) or you just want to compare
-providers; the A2A client and every test/demo in this guide work completely
-unchanged either way, since the client only ever speaks A2A protocol to the
-agent's HTTP endpoint — which LLM answers behind that endpoint is invisible
-to it.
-
-To switch, three changes to
-`path\to\a2a-samples\samples\python\agents\adk_currency_agent`:
-
-1. Add `anthropic` to `pyproject.toml`'s `dependencies`, then `uv sync`.
-2. In `src/currency_agent/agent.py`, swap the model:
-
-   ```python
-   from google.adk.models.anthropic_llm import AnthropicLlm
-   # ...
-   model=AnthropicLlm(model='claude-opus-4-8'),   # was: model='gemini-2.0-flash'
-   ```
-
-   **Use `AnthropicLlm`, not the similarly-named `Claude` class** — `Claude`
-   is the Vertex-AI-hosted variant and requires `GOOGLE_CLOUD_PROJECT`/
-   `GOOGLE_CLOUD_LOCATION`; it will raise `ValueError: GOOGLE_CLOUD_PROJECT
-   and GOOGLE_CLOUD_LOCATION must be set for using Anthropic on Vertex.`
-   if you reach for it by mistake. `AnthropicLlm` is the direct-API class —
-   it just needs `ANTHROPIC_API_KEY`.
-3. **Known ADK bug — wrap every tool's return value in `{"result": ...}`.**
-   ADK's Anthropic tool-result serializer
-   (`google/adk/models/anthropic_llm.py`, around line 100) only extracts
-   content when the tool's return dict has a top-level `"content"` or
-   `"result"` key — that's Gemini/ADK's own function-response convention.
-   `get_latest_rates` and the other tools in `agent.py` return the raw
-   Frankfurter JSON dict (`{"amount": ..., "rates": {...}}`) with neither
-   key, so Claude silently receives an **empty** tool result every time,
-   retries a few times, then gives up claiming "the rate service isn't
-   returning data" — even though the log shows the HTTP call to Frankfurter
-   succeeding (`200 OK`) on every attempt. Fix: change each tool's final
-   `return response.json()` to `return {'result': response.json()}`. This
-   is harmless on the Gemini path too — Gemini's serializer doesn't care
-   about the wrapper key.
-4. Also add a system instruction enforcing the exact JSON response shape.
-   ADK passes `output_schema=AgentResponse` through to Gemini as an
-   enforced schema, but **not** to Claude — `anthropic_llm.py` has no
-   `response_schema`/`output_schema` handling at all, so without an
-   explicit instruction Claude has no schema pressure and could
-   occasionally reply with something `AgentResponse.model_validate_json`
-   can't parse (which `agent_executor.py` then reports as
-   `TASK_STATE_FAILED`). Append to the agent's `instruction`:
-
-   ```python
-   ' Always respond with ONLY a JSON object matching this exact shape, no other text: '
-   '{"message": "<your reply text>", "status": "completed" | "input-required" | "failed"}. '
-   'Use "completed" once the conversion has been answered, "input-required" when you need '
-   'the user to supply more information (e.g. a missing target currency), and "failed" only '
-   'if a tool call errored.'
-   ```
-
-Then add `ANTHROPIC_API_KEY=sk-ant-...` to
-`servers/adk_currency_agent/.env` alongside `GOOGLE_API_KEY` (get a key at
-https://console.anthropic.com/settings/keys — no free tier, but the cost of
-running this repo's tests/demo against it is a handful of cents), restart
-the server the normal way (§7 — Python doesn't hot-reload), and everything
-downstream — the demo, `bal test --groups interop`, this whole guide — works
-identically to the Gemini path, all 8 interop tests passing with real
-conversions.
+Both currency agents work on Gemini too if you'd rather not use Claude —
+the client and every test/demo in this guide are unaffected either way,
+since it only ever speaks A2A protocol to the agent's HTTP endpoint. For
+`adk_currency_agent`: revert step 2 above to
+`model='gemini-2.0-flash'` (steps 3-4 are harmless left in place, but not
+required for Gemini), and set `GOOGLE_API_KEY` instead of
+`ANTHROPIC_API_KEY` in `.env` and via `set`. For `langgraph`: just don't
+set `model_source=anthropic` (it defaults to `google`) and set
+`GOOGLE_API_KEY` instead. Gemini's free tier is easy to exhaust — see §7.
 
 ## 4. Run the real interop tests
 
@@ -411,72 +408,42 @@ tells the actual story:
 
 ## 7. Troubleshooting
 
-- **Currency agent exits immediately** — `GOOGLE_API_KEY` (or
-  `ANTHROPIC_API_KEY`, for the `langgraph` agent or a Claude-backed
-  `adk_currency_agent`) isn't set. Check `.env` has a real key and that the
-  `set VAR=...` actually ran in the *same* `cmd` window, right before
-  `uv run ...` — `set` only affects the window it's typed in, so a fresh
-  window (or one where you set it before switching directories with
-  `cd /d`) won't have it. Confirm with `echo %GOOGLE_API_KEY%` /
+- **You typed `bal run` inside an agent's directory and got "Invalid
+  Ballerina source file"** — every agent is a Python project; use
+  `uv run currency_agent` / `uv run app` / `python __main__.py` instead
+  (see the note at the top of §3). `bal` only runs from this repo's own
+  root, for §4/§5.
+- **Currency agent exits immediately** — `ANTHROPIC_API_KEY` (or
+  `GOOGLE_API_KEY`, if you're using Gemini — see §3) isn't set. Check
+  `.env` has a real key and that the `set VAR=...` actually ran in the
+  *same* `cmd` window, right before `uv run ...` — `set` only affects the
+  window it's typed in, so a fresh window (or one where you set it before
+  switching directories with `cd /d`) won't have it. Confirm with
   `echo %ANTHROPIC_API_KEY%` before running.
-- **Interop test against the currency agent times out** — Gemini + a live
-  rate lookup routinely takes several seconds; a stock `bal test` timeout
-  may not be enough under load. The tests already set a longer
+- **Interop test against a currency agent times out** — a live rate lookup
+  plus a real LLM call routinely takes several seconds; a stock `bal test`
+  timeout may not be enough under load. The tests already set a longer
   `http:ClientConfiguration.timeout` where needed
   (`testCurrencyAgentSendMessageStream` uses 30s) — if you still see
-  timeouts, it's more likely API latency or quota than a bug.
+  timeouts, it's more likely API latency than a bug.
 - **Currency agent suddenly returns `TASK_STATE_FAILED` with no artifact
   (or hangs, then times out)** — `agent_executor.py` catches *any*
-  exception from the ADK runner and unconditionally marks the task
-  `failed`; it never surfaces the real Gemini error to the A2A client, so
-  "failed, no artifact" is the only client-visible symptom no matter what
-  actually went wrong server-side. **Check the currency agent's own
-  console/log output first** — the real exception (with the Gemini error
-  body) is printed there, not on the A2A client side.
+  exception from the underlying agent runner and unconditionally marks the
+  task `failed`; it never surfaces the real LLM error to the A2A client,
+  so "failed, no artifact" is the only client-visible symptom no matter
+  what actually went wrong server-side. **Check the currency agent's own
+  console/log output first** — the real exception is printed there, not on
+  the A2A client side. Remember to restart the server after editing `.env`
+  or `agent.py` — Python doesn't hot-reload.
 
-  Two distinct causes look the same from the client but need different
-  fixes:
-  - **`limit: 0` in the error body** (e.g. `Quota exceeded for metric:
-    generate_content_free_tier_requests, limit: 0, model: ...`) — this is
-    **not** "you used up your quota," it's "this API key's project has
-    *zero* free-tier quota allocated," and it applies across models, not
-    just one. Switching `agent.py`'s `model=` to a different model will
-    **not** fix this — confirmed by testing (`gemini-3-flash-preview` →
-    `gemini-2.0-flash` still hit `limit: 0` after a full server restart).
-    The fix is a different key: go to
-    [Google AI Studio](https://aistudio.google.com/apikey) → "Create API
-    key" → **create it in a new project**, not an existing/older Cloud
-    project — free-tier eligibility is a project-level setting, not a
-    per-request thing. If a fresh-project key still shows `limit: 0`, the
-    free tier likely isn't available at all for that account/region, and
-    you'd need billing enabled for paid-tier access instead.
-  - **A numeric per-minute/per-day quota actually being exceeded** (the
-    error names a real number, not `0`, or you've been sending many
-    requests in quick succession) — this is genuine usage-based
-    exhaustion. `agent.py` combines `tools=[...]` with
-    `output_schema=AgentResponse` in ADK's `LlmAgent`, so each user turn
-    costs **1 Gemini call** for a message that doesn't need a tool (e.g.
-    "Say hello") and **2 calls** for an actual conversion request (one to
-    decide to invoke `get_latest_rates`, a second to produce the final
-    structured response after the tool result) — one
-    `bal test --groups interop` run with `A2A_CURRENCY_AGENT_URL` set
-    costs ~4 calls, since both tests send real conversions. Wait for the
-    quota window to reset (daily quotas typically reset at midnight
-    Pacific), or budget your runs — skip the currency-agent leg entirely
-    when you're only checking something unrelated to v0.3;
-    `A2A_TEST_SERVER_URL` alone against `helloworld` costs zero Gemini
-    calls.
-
-  Either way, check https://ai.dev/rate-limit — that's the only
-  authoritative source of what limit you actually hit. **Remember to
-  restart the currency agent process after editing `.env` or `agent.py`**
-  — Python doesn't hot-reload; a running server keeps its old key/model in
-  memory until you stop and re-launch it (§3's `uv run currency_agent` or
-  the equivalent `.venv\Scripts\currency_agent.exe`).
-
-  If Gemini quota keeps being a blocker, §3's "Optional: run
-  `adk_currency_agent` on Claude instead of Gemini" is a verified working
-  alternative — same agent, same tests, no Gemini dependency at all.
+  **If you're using Gemini** and see `limit: 0` in the error body (e.g.
+  `Quota exceeded for metric: ..., limit: 0`), that's a project-level
+  free-tier eligibility problem, not day-to-day usage — switching models
+  won't fix it; get a fresh key from
+  [Google AI Studio](https://aistudio.google.com/apikey) in a **new**
+  project. A numeric (non-zero) quota error is genuine usage-based
+  exhaustion — check https://ai.dev/rate-limit, wait for the reset window,
+  or switch to Claude (§3) to sidestep the free tier entirely.
 - **`bal push` says the package already exists** — that's fine, it means
   you already published this exact version; re-run `bal pack` after making
   a change and it'll produce a fresh `.bala` to push.

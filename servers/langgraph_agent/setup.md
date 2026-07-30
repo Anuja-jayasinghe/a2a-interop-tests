@@ -101,6 +101,12 @@ with full reasoning in [`findings.md`](./findings.md).
    `for item in self.graph.stream(...)` to
    `async for item in self.graph.astream(...)` — see findings.md §3 for why
    the synchronous form silently defeats cancellation entirely.
+5. **`app/agent.py`** — give `get_exchange_rate`'s `httpx.get()` call an
+   explicit 10s timeout and one retry (findings.md §6). With no timeout set
+   at all, a transient delay against the live Frankfurter API — plausible
+   under the concurrent load of running the full interop suite — surfaces
+   as a tool error that the agent (mis)reports as `INPUT_REQUIRED` rather
+   than retrying.
 
 ## Quick start
 
