@@ -207,7 +207,7 @@ Full details: [`servers/helloworld/setup.md`](servers/helloworld/setup.md).
 
 This agent is Google-ADK-based, but ADK has pluggable model backends and
 this repo runs it on Claude by default — one Anthropic key covers both
-currency agents. Three changes make that work in
+currency agents. Four changes make that work in
 `path\to\a2a-samples\samples\python\agents\adk_currency_agent` (already
 applied if you're working from this repo's own checkout; needed from a
 fresh `a2a-samples` clone):
@@ -250,6 +250,18 @@ fresh `a2a-samples` clone):
    'Use "completed" once the conversion has been answered, "input-required" when you need '
    'the user to supply more information (e.g. a missing target currency), and "failed" only '
    'if a tool call errored.'
+   ```
+5. **`main.py`'s startup check still required `GOOGLE_API_KEY`
+   unconditionally** — a leftover from before this agent ran on Claude,
+   never updated when step 2 switched the model to `AnthropicLlm`. Left
+   as-is, the server refuses to start with only `ANTHROPIC_API_KEY` set:
+   `GOOGLE_API_KEY must be set`. Fix `start_server`'s check to accept
+   either key:
+
+   ```python
+   if not os.getenv('ANTHROPIC_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+       logger.error('ANTHROPIC_API_KEY (or GOOGLE_API_KEY, if using Gemini) must be set')
+       sys.exit(1)
    ```
 
 Then bring it up:

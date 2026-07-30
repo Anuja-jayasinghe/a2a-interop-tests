@@ -172,3 +172,34 @@ its AgentCard and translates transparently — confirmed via
 running agent. See `a2a-ballerina`'s
 `a2a/docs/superpowers/specs/2026-07-28-v03-client-compat-design.md` for
 the implementation.
+
+## 7. Running on Claude instead of Gemini — four local patches, one of them easy to miss
+
+This repo runs `adk_currency_agent` on Claude by default (DEMO_GUIDE.md
+§3) rather than Gemini, to sidestep Gemini's free-tier quota walls. Three
+patches make that work (ADK's Vertex-vs-direct-API class trap, the
+tool-result serializer only recognizing `content`/`result` keys, and a
+system instruction enforcing the JSON response shape — all in
+`agent.py`, summarized in DEMO_GUIDE.md §3). A fourth, easy to miss
+because it's in a different file entirely: `main.py`'s startup check
+(`start_server`) still unconditionally required `GOOGLE_API_KEY` and
+`sys.exit(1)`'s immediately if it's unset — a leftover from before the
+agent was patched to run on Claude, never updated when `agent.py`'s model
+switched to `AnthropicLlm`. Running with only `ANTHROPIC_API_KEY` set (the
+documented default setup) fails immediately with:
+
+```
+GOOGLE_API_KEY must be set
+ERROR:currency_agent.main:GOOGLE_API_KEY must be set
+```
+
+even though the agent never reads `GOOGLE_API_KEY` anywhere once
+`agent.py`'s model is `AnthropicLlm`. **Fix**: check for either key rather
+than only `GOOGLE_API_KEY`, so both the Claude-default setup and the
+documented Gemini-fallback path (§3's "Using Gemini instead") work:
+
+```python
+if not os.getenv('ANTHROPIC_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+    logger.error('ANTHROPIC_API_KEY (or GOOGLE_API_KEY, if using Gemini) must be set')
+    sys.exit(1)
+```
