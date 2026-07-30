@@ -41,6 +41,13 @@ that the client works at all (no credentials, no LLM latency). Run
 story with a second, differently-built agent. Run the `langgraph` agent
 for everything else — it is the one this guide leads with below.
 
+**You can run all three at once** — they listen on different ports
+(`:10000`, `:9999`, `:10999`) and don't share any state, so there's no
+conflict. Give each its own `cmd` window (see §3 for each agent's start
+command), then set all three env vars in a single terminal window and run
+`bal test --groups interop` once to get all 12 interop tests in one pass —
+see §4.
+
 ## 1. Prerequisites
 
 - **Ballerina** 2201.13.4 (`bal version` to check) — needed for everything.
