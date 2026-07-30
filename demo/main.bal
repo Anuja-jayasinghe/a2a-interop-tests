@@ -3,14 +3,20 @@ import ballerina/io;
 import ballerina/os;
 import ballerina/uuid;
 
-// Defaults to helloworld (v1.0). Point this at a different agent (e.g.
-// adk_currency_agent on http://localhost:10999, which speaks A2A v0.3) by
-// setting A2A_DEMO_SERVER_URL -- the client's protocol-version
-// auto-detection (below) makes this demo work identically either way,
-// with no code branching on which dialect the server speaks.
+// Pick which agent to run this demo against: uncomment exactly one of the
+// two `return` lines below (comment out the other), then `bal run` -- no
+// env var needed. A2A_DEMO_SERVER_URL, if set, still overrides both, for
+// scripting/CI use. The client's protocol-version auto-detection (below)
+// makes this demo work identically either way, with no code branching on
+// which dialect the server speaks.
 isolated function serverUrl() returns string {
     string envUrl = os:getEnv("A2A_DEMO_SERVER_URL");
-    return envUrl != "" ? envUrl : "http://127.0.0.1:9999";
+    if envUrl != "" {
+        return envUrl;
+    }
+
+    return "http://127.0.0.1:9999";     // helloworld (v1.0)
+    // return "http://localhost:10999"; // adk_currency_agent (v0.3)
 }
 
 public function main() returns error? {
