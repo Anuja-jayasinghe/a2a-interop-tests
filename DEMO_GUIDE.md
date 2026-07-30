@@ -123,21 +123,29 @@ This walks through `resolveAgentCard`, one `sendMessage`, one
 `sendMessageStream` (printing events live), then an interactive loop —
 type a line, press Enter, see it streamed back; `quit` to exit.
 
-**Works against either agent, unmodified.** `demo/main.bal` defaults to
-`helloworld` (`http://127.0.0.1:9999`, v1.0), but reads
-`A2A_DEMO_SERVER_URL` if set and always passes the resolved `AgentCard`
-into the `Client` constructor — so protocol-version auto-detection just
-happens, the same way it does in `tests/currency_agent_interop_test.bal`.
-To watch the v0.3 path work interactively rather than just see it pass in
-a test runner:
+**Works against either agent, unmodified.** `demo/main.bal`'s `serverUrl()`
+function has one `return` line active and one commented out — to switch
+which agent the demo targets, open `demo/main.bal`, comment out the
+active line and uncomment the other, then just `bal run` again:
+
+```ballerina
+return "http://127.0.0.1:9999";     // helloworld (v1.0)
+// return "http://localhost:10999"; // adk_currency_agent (v0.3)
+```
+
+The demo always passes the resolved `AgentCard` into the `Client`
+constructor, so protocol-version auto-detection just happens, the same
+way it does in `tests/currency_agent_interop_test.bal` — same script,
+same output format, no code branching, regardless of which line is
+active.
+
+`A2A_DEMO_SERVER_URL`, if set, still overrides whichever line is active —
+useful for scripting or CI without editing the file:
 
 ```bash
 cd demo
 A2A_DEMO_SERVER_URL=http://localhost:10999 bal run
 ```
-
-Same script, same output format, no code branching — the only difference
-is which agent card gets resolved first.
 
 ## 6. Suggested demo narrative
 
