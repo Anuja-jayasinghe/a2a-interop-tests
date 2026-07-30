@@ -81,15 +81,18 @@ Root: `C:\gitProject\a2a-interop-tests`.
 | `DEMO_GUIDE.md` | **Start here to actually run anything** — setup, testing, the interactive demo, and a suggested presentation order. |
 | `FINDINGS.md` | Master index: one line per agent tested, linking to its full writeup. |
 | `LEARNING_LOG.md` | Interop-specific lessons (e.g. "reference implementations deviate from spec, verify everything empirically"). |
-| `tests/` | The real interop test suite (its own Ballerina project). `interop_test.bal` (5 tests against `helloworld`), `currency_agent_interop_test.bal` (2 tests against `adk_currency_agent`), `testutil.bal` (shared helpers — `getServerBaseUrl`, `assertValidTask`, `extractArtifactText`). Every test no-ops with a visible `SKIPPED` marker unless its env var is set — nothing here silently skips without saying so. |
+| `tests/` | The real interop test suite (its own Ballerina project). `interop_test.bal` (5 tests against `helloworld`), `currency_agent_interop_test.bal` (2 tests against `adk_currency_agent`), `langgraph_agent_interop_test.bal` (5 tests against the langgraph currency agent — genuine in-flight cancel/subscribe, `INPUT_REQUIRED`/multi-turn, push-notification CRUD), `testutil.bal` (shared helpers — `getServerBaseUrl`, `assertValidTask`, `extractArtifactText`). Every test no-ops with a visible `SKIPPED` marker unless its env var is set — nothing here silently skips without saying so. |
 | `demo/` | A separate Ballerina project: an interactive, watchable walkthrough of `Client` — discovery, one-shot `sendMessage`, streaming `sendMessageStream`, then a type-and-see interactive loop. Defaults to `helloworld` (v1.0), but reads `A2A_DEMO_SERVER_URL` and passes the resolved `AgentCard` into `Client`, so it works identically against `adk_currency_agent` (v0.3) too — same code, no branching. |
 | `servers/helloworld/` | `setup.md` (venv/run instructions, no credentials needed) + `findings.md` (the v1.0 non-conformances found: missing `AgentCard.url`, PascalCase methods, wrapped `SendMessage` response, `subscribeToTask`'s two-fold non-conformance on terminal tasks). |
-| `servers/adk_currency_agent/` | `setup.md` + `findings.md` (the discovery that this agent speaks **v0.3**, not v1.0 — raw wire evidence included) + `.env`/`.env.example` (Gemini API key, git-ignored — never committed). |
+| `servers/adk_currency_agent/` | `setup.md` + `findings.md` (the discovery that this agent speaks **v0.3**, not v1.0 — raw wire evidence included) + `.env`/`.env.example` (Gemini or Anthropic API key, git-ignored — never committed). |
+| `servers/langgraph_agent/` | `setup.md` (three local patches needed to run it on Claude) + `findings.md` (first agent to genuinely exercise in-flight `cancelTask`/`subscribeToTask` and real push-notification CRUD; surfaced a real `a2a-sdk==0.3.0` non-conformance on delete, plus a blocking-event-loop cancellation bug fixed in the sample). |
 
-**Both reference servers are Python** (`a2a-samples`), run locally:
+**All three reference servers are Python** (`a2a-samples`), run locally:
 `helloworld` on `:9999` (no credentials), `adk_currency_agent` on `:10999`
-(needs a Google API key with Gemini access — it makes a real LLM call plus
-a live currency-rate lookup per conversion).
+(Gemini or Anthropic key — makes a real LLM call plus a live currency-rate
+lookup per conversion), langgraph currency agent on `:10000` (Anthropic key
+only in this repo — same real-call pattern, but processes asynchronously
+enough to genuinely test in-flight cancel/subscribe and push notifications).
 
 ## 4. How the client actually works now
 
@@ -153,14 +156,13 @@ reference SDK's own conversion code that `final` is purely derived from
 - `a2a-interop-tests` PR #3 (`test: add real interop tests against
   adk_currency_agent`) — **merged**. Confirms the v0.3 compat layer works
   against the real running agent, not just mocks.
-- Both reference servers can be run locally per §3 above; see
+- All three reference servers can be run locally per §3 above; see
   [`DEMO_GUIDE.md`](DEMO_GUIDE.md) for the exact commands.
 
 ## 6. Known gaps / good next steps
 
 Findings from the final review — resolved items are kept here as a
-record of what was closed and how; the one genuine open item is called
-out at the end.
+record of what was closed and how; the one genuine open item is #4.
 
 1. ~~**`tenant` routing** was sent to v0.3 servers unconditionally.~~
    **Resolved** — `Client` now omits it in `V0_3` mode
@@ -170,20 +172,32 @@ out at the end.
    work.~~ **Resolved** — the spec now documents `encodeV03Message`/
    `encodeV03Part`/`encodeV03SendConfiguration`/`encodeV03Role` alongside
    the inbound decode functions it already covered.
-3. **Two wire-shape assumptions remain unverified against a live server**
-   — still open, and likely to stay that way without a third reference
-   agent: `TaskPushNotificationConfig`'s exact v0.3 field names, and
-   whether `Message.referenceTaskIds`/`extensions`/`Artifact.extensions`
-   carry identical field names on the wire. Both extrapolate from the
-   pattern every other field in this file follows; neither `helloworld`
-   nor `adk_currency_agent` exercises push notifications or cross-task
-   references, so closing this for real needs a different reference agent
-   that actually uses one of those features.
-4. ~~**`demo/` only targeted `helloworld`**.~~ **Resolved** —
+3. ~~**`TaskPushNotificationConfig`'s exact v0.3 field names were
+   unverified against a live server.**~~ **Resolved** — the `langgraph`
+   currency agent (`a2a-samples/samples/python/agents/langgraph`, running
+   on Claude; see `servers/langgraph_agent/`) genuinely declares and wires
+   `capabilities.pushNotifications: true`. `createTaskPushNotificationConfig`/
+   `getTaskPushNotificationConfig`/`listTaskPushNotificationConfigs` all
+   confirmed passing against it for real. `deleteTaskPushNotificationConfig`
+   surfaced a genuine `a2a-sdk==0.3.0` non-conformance instead (a JSON-RPC
+   response with neither `result` nor `error`) — correctly rejected by
+   `Client` as `InvalidAgentResponseError`; see
+   `servers/langgraph_agent/findings.md` §5. Getting a genuine in-flight
+   `cancelTask`/`subscribeToTask` test working against the same agent also
+   surfaced and fixed two real bugs in the sample (a blocking event loop,
+   and a hard-cancellation path that never published a terminal status) —
+   see the same findings doc §3.
+4. **One wire-shape assumption remains unverified against a live server**
+   — still open: whether `Message.referenceTaskIds`/`extensions`/
+   `Artifact.extensions` carry identical field names on the wire. This
+   extrapolates from the pattern every other field in this file follows;
+   no reference agent in this repo exercises cross-task references or
+   extensions, so closing this for real needs one that does.
+5. ~~**`demo/` only targeted `helloworld`**.~~ **Resolved** —
    `demo/main.bal` now reads `A2A_DEMO_SERVER_URL` and always passes the
    resolved `AgentCard` into `Client`; verified interactively against both
    agents, same script, no branching. See
    [`DEMO_GUIDE.md`](DEMO_GUIDE.md) §4.
-5. ~~**No round-trip property test** existed.~~ **Resolved** —
+6. ~~**No round-trip property test** existed.~~ **Resolved** —
    `parseV03Message(check encodeV03Message(m)) == m`, covering every Part
    variant plus a minimal-message case, added to `compat_v03_test.bal`.
