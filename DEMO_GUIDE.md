@@ -344,14 +344,16 @@ This walks through `resolveAgentCard`, one `sendMessage`, one
 `sendMessageStream` (printing events live), then an interactive loop —
 type a line, press Enter, see it streamed back; `quit` to exit.
 
-**Works against either agent, unmodified.** `demo/main.bal`'s `serverUrl()`
-function has one `return` line active and one commented out — to switch
-which agent the demo targets, open `demo/main.bal`, comment out the
-active line and uncomment the other, then just `bal run` again:
+**Works against any of the three agents, unmodified.** `demo/main.bal`'s
+`serverUrl()` function has one `return` line active and the other two
+commented out — to switch which agent the demo targets, open
+`demo/main.bal`, comment out the active line and uncomment the one you
+want, then just `bal run` again:
 
 ```ballerina
-return "http://127.0.0.1:9999";     // helloworld (v1.0)
-// return "http://localhost:10999"; // adk_currency_agent (v0.3)
+//return "http://127.0.0.1:9999";     // helloworld (v1.0)
+//return "http://localhost:10999"; // adk_currency_agent (v0.3)
+return "http://localhost:10000"; // langgraph currency agent (v0.3) -- recommended
 ```
 
 The demo always passes the resolved `AgentCard` into the `Client`
@@ -361,20 +363,11 @@ same output format, no code branching, regardless of which line is
 active.
 
 `A2A_DEMO_SERVER_URL`, if set, still overrides whichever line is active —
-useful for scripting or CI without editing the file, and it's how you
-point the demo at the `langgraph` agent, since that agent isn't one of
-`serverUrl()`'s two hardcoded lines:
+useful for scripting or CI without editing the file:
 
 ```bat
 cd demo
 set A2A_DEMO_SERVER_URL=http://localhost:10000
-bal run
-```
-
-```bat
-:: or against adk_currency_agent, without editing the file
-cd demo
-set A2A_DEMO_SERVER_URL=http://localhost:10999
 bal run
 ```
 
