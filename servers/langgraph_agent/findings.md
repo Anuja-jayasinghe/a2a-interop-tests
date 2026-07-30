@@ -222,7 +222,59 @@ debatable) design choice for how the agent recovers conversationally from
 tool errors, not a bug introduced by this repo's patches, and not
 something to route around here.
 
-## 7. Confirmed via the real `ballerina/a2a` client, not just curl
+## 7. The final structured-response call can silently drop the model's own answer
+
+Asking the demo (interactive loop) "Find the list of supported EU
+currencies and show the exchange rate with USD in markdown format"
+produced an artifact whose *entire* content was:
+
+```
+I've successfully retrieved exchange rates for the main EU currencies
+against USD. The table above shows that 1 USD equals approximately 0.88
+EUR, 21.26 CZK, ...
+```
+
+No table — just a summary referencing one. Reproduced directly (bypassing
+the demo) to rule out a client/demo display bug: the raw JSON-RPC response
+confirmed the artifact's only text part really was that summary sentence.
+
+**Root cause**: `create_react_agent(..., response_format=...)` runs a
+*separate* final model call, after the main ReAct loop, specifically to
+produce the structured `{status, message}` output. That call sees the
+full conversation history — including the markdown table the model
+already wrote earlier in the ReAct trace — and, since (from that call's
+perspective) the table was already "shown" to the user, it writes a
+short wrap-up referencing it ("the table above") instead of repeating it.
+But only `structured_response.message` ever becomes the artifact's
+content (`agent_executor.py` wraps just that string in the single
+`Part`), so the table itself never reaches the A2A client at all — not a
+truncation, not a display bug, the model's own final answer genuinely
+doesn't contain it.
+
+**Fix**: make `FORMAT_INSTRUCTION` explicit that `message` is the *only*
+thing the user will ever see, so the model can't rely on anything earlier
+in the trace still being visible:
+
+```python
+"The 'message' field is the ONLY thing the user will see -- they "
+"cannot see anything from earlier in this conversation, including "
+"any table or answer you already wrote. Never write things like "
+'"the table above" or "as I mentioned" -- always repeat the full '
+"answer (including any table) directly in the message field, as "
+"if this were the first and only reply the user will see."
+```
+
+Confirmed fixed by direct reproduction — the same kind of request now
+returns the full markdown table as the artifact's actual content:
+
+```json
+{"result":{"artifacts":[{"parts":[{"text":"Here's the exchange rate table for EUR, PLN, and SEK against USD:\n\n| Currency | Rate (per 1 USD) | Date |\n|----------|------------------|------------|\n| EUR | 0.87873 | ... |\n..."}]}],"status":{"state":"completed"}}}
+```
+
+Full interop suite re-run afterward: still 12 passing, 1 failing (only
+the already-documented §5 delete non-conformance).
+
+## 8. Confirmed via the real `ballerina/a2a` client, not just curl
 
 `tests/langgraph_agent_interop_test.bal`, run with
 `A2A_LANGGRAPH_AGENT_URL=http://localhost:10000`:

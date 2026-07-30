@@ -107,6 +107,13 @@ with full reasoning in [`findings.md`](./findings.md).
    under the concurrent load of running the full interop suite — surfaces
    as a tool error that the agent (mis)reports as `INPUT_REQUIRED` rather
    than retrying.
+6. **`app/agent.py`** — tell the model explicitly that `FORMAT_INSTRUCTION`'s
+   `message` field is the only thing the user will ever see (findings.md
+   §7). Without this, the separate final structured-output call can write
+   a summary referencing content the model already produced earlier in
+   its own ReAct trace (e.g. "the table above") instead of repeating it —
+   and since only that field becomes the artifact, the actual answer never
+   reaches the client at all.
 
 ## Quick start
 
