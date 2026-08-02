@@ -14,9 +14,19 @@
 // each binding works in isolation against a different server.
 
 import ballerina/a2a;
+import ballerina/http;
 import ballerina/io;
 import ballerina/os;
 import ballerina/test;
+
+// dice_agent's Quarkus dev-mode server doesn't negotiate h2c (HTTP/2
+// cleartext) correctly with Ballerina's http:Client, which defaults to
+// HTTP/2 -- every request, including plain agent-card discovery, comes
+// back "400 Bad Request" with nothing logged server-side (confirmed: the
+// request never reaches Quarkus's own routing/logging at all). Forcing
+// HTTP/1.1 fixes it outright. Not a ballerina/a2a bug -- recorded in
+// servers/dice_agent/findings.md.
+final http:ClientConfiguration DICE_AGENT_CLIENT_CONFIG = {httpVersion: http:HTTP_1_1};
 
 isolated function isDiceAgentConfigured() returns boolean {
     return os:getEnv("A2A_DICE_AGENT_URL") != "";
@@ -34,8 +44,8 @@ function testDiceAgentSendMessageJsonRpc() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_DICE_AGENT_URL");
-    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl);
-    a2a:Client c = check new (baseUrl, agentCard = card, binding = "JSONRPC");
+    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl, DICE_AGENT_CLIENT_CONFIG);
+    a2a:Client c = check new (baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, agentCard = card, binding = "JSONRPC");
 
     a2a:Message msg = {
         messageId: "dice-interop-jsonrpc-1",
@@ -65,8 +75,8 @@ function testDiceAgentSendMessageRest() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_DICE_AGENT_URL");
-    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl);
-    a2a:Client c = check new (baseUrl, agentCard = card, binding = "HTTP+JSON");
+    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl, DICE_AGENT_CLIENT_CONFIG);
+    a2a:Client c = check new (baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, agentCard = card, binding = "HTTP+JSON");
 
     a2a:Message msg = {
         messageId: "dice-interop-rest-1",
@@ -96,8 +106,12 @@ function testDiceAgentSendMessageStreamGrpc() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_DICE_AGENT_URL");
-    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl);
-    a2a:Client c = check new (baseUrl, agentCard = card, binding = "GRPC");
+    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl, DICE_AGENT_CLIENT_CONFIG);
+    // Note: DICE_AGENT_CLIENT_CONFIG's httpVersion only affects this
+    // Client's internal (unused, in GRPC mode) plain http:Client -- the
+    // actual gRPC stub always speaks HTTP/2 regardless, since
+    // projectToGrpcClientConfig only ever projects .auth, never httpVersion.
+    a2a:Client c = check new (baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, agentCard = card, binding = "GRPC");
 
     a2a:Message msg = {
         messageId: "dice-interop-grpc-1",

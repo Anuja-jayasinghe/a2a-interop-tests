@@ -225,40 +225,101 @@ three new tests build with no errors against the gRPC-enabled client API).
 The failure only appears at **test runtime**, once the `grpc` module's own
 `init()` actually runs.
 
-**Attempted fix, did not work**: adding an explicit
-`[[dependency]] {org="ballerina", name="http", version="2.14.13"}` block to
-`Ballerina.toml` to pin the transitive version. Confirmed via
-`Dependencies.toml` after a full clean rebuild (both `--offline` and
-online) that the pin has no effect — `http` still resolves to `2.16.6` with
-no `pinned = true` marker in the lock file. `http` isn't directly imported
-by this project (only transitively via `a2a` and `grpc`), and Ballerina's
-diamond-dependency resolution appears to pick the highest version any
-requester in the graph is compatible with, regardless of an explicit
-`[[dependency]]` entry for a package that isn't directly `import`ed —
-different from how a direct dependency's version pin behaves. Reverted the
-ineffective pin rather than leave dead configuration in place.
+**First fix attempt, did not work**: an explicit
+`[[dependency]] {org="ballerina", name="http", version="2.14.13"}` block in
+`Ballerina.toml` alone had no effect — `http` still resolved to `2.16.6`
+(confirmed via `Dependencies.toml` after clean `--offline` and online
+rebuilds, no `pinned = true` marker appearing).
 
-**Net effect**: the three new tests (`testDiceAgentSendMessageJsonRpc`,
-`testDiceAgentSendMessageRest`, `testDiceAgentSendMessageStreamGrpc`) are
-written, compile, and type-check correctly against the real gRPC-capable
-`a2a:Client` API — but running `bal test --groups interop` in *this*
-environment currently fails at the `grpc` module's own init, for every test
-in the suite (confirmed: even the pre-existing, previously-passing
-`testInteropSendMessage` against `helloworld` now hits the same error,
-since the whole package now transitively pulls in `grpc`). This is a
-Ballerina package-resolution issue, not a defect in `ballerina/a2a`'s gRPC
-binding code or in these tests. Whoever picks this up next should either
-find the correct way to force a compatible `http`/`grpc` pairing (possibly
-requires an explicit `import ballerina/http` in this package to make the
-pin take effect, or a `ballerina/grpc` release built against a newer
-`http`), or reproduce this in a clean environment to rule out something
-specific to this session's Ballerina distribution/cache state.
+**Actual fix**: two things together, neither sufficient alone:
 
-## 7. Not yet done: real interop tests / demo run against a real Claude response
+1. Force `http` to be a *direct* dependency of this package (a manual pin
+   for a package only pulled in transitively is silently ignored) — added
+   `import ballerina/http;` to `tests/testutil.bal`, backed by a genuinely
+   `unusedHttpVersionPinAnchor()` function so the import isn't itself
+   flagged as unused (Ballerina errors, not warns, on that).
+2. Manually edit the *generated* `Dependencies.toml` to set `http`'s
+   `version = "2.14.13"` directly, then rebuild with `bal build --sticky`
+   (`--sticky` = "stick to `Dependencies.toml`'s versions"). A plain
+   `[[dependency]]` entry in `Ballerina.toml` only ever raises a version
+   floor for direct dependencies during normal resolution — it doesn't
+   force a version *down* from whatever the resolver would otherwise pick
+   as "newest compatible." Editing the lock file directly and pinning with
+   `--sticky` is the only mechanism that actually holds a lower version.
 
-This session verified the *plumbing* (§3-4) and the *server's own spec
-conformance* (§1-2, §5) but did not run `ballerina/a2a`'s actual client
-against this agent with a real Anthropic key, since none was available.
-See `tests/dice_agent_interop_test.bal` and the demo changes for what still
-needs a real key to confirm end-to-end (matching the same pattern as every
-other Claude-backed agent in this repo).
+After both, `java.lang.IllegalAccessError` is gone — confirmed by
+re-running the previously-broken `testInteropSendMessage` (`helloworld`),
+which now fails only with a mundane connection error (no server was
+running at that moment), not the class-loading error.
+
+## 7. Ballerina's default HTTP/2 client doesn't negotiate h2c correctly against this agent's Quarkus dev-mode server
+
+With §6's fix in place, all three new tests still failed identically at
+`a2a:resolveAgentCard` — `"Agent Card fetch failed with HTTP 400"` — for a
+plain `GET /.well-known/agent-card.json`, which `curl` (HTTP/1.1) fetches
+successfully every time. The dice agent's own Quarkus log shows **no
+trace of the request at all** — not even a routing/logging line — meaning
+it never reached the application layer as a valid HTTP/1.1 request.
+
+Isolated with a throwaway diagnostic script calling `a2a:resolveAgentCard`
+twice, once with default settings and once with `clientConfig =
+{httpVersion: http:HTTP_1_1}`:
+
+```
+default:  Agent Card fetch failed with HTTP 400
+http1.1:  OK
+```
+
+Root cause: `ballerina/http`'s client defaults to HTTP/2, attempting h2c
+(HTTP/2 cleartext, prior-knowledge) for a non-TLS `http://` URL. Quarkus
+dev mode's Netty/Vert.x-based listener doesn't negotiate that correctly
+here and appears to reject the connection preface outright with a
+synthesized `400`, before any request-level logging fires — consistent
+with the total silence in the server's own log. **Fix**: pass
+`clientConfig = {httpVersion: http:HTTP_1_1}` to both `resolveAgentCard`
+and the `Client` constructor. Confirmed safe for the `GRPC`-binding case
+too — `projectToGrpcClientConfig` (`a2a-ballerina/a2a/auth.bal`) only ever
+projects `.auth` from `http:ClientConfiguration` into `grpc:ClientConfiguration`,
+never `.httpVersion`, so the actual gRPC stub still correctly speaks
+HTTP/2 regardless of this setting on the (otherwise-unused, in GRPC mode)
+internal plain `http:Client`.
+
+Not a `ballerina/a2a` bug, and arguably not even a bug in the agent —
+Quarkus's h2c handling is a known rough edge in dev mode specifically —
+but a real, previously-unverified interop wrinkle that only a genuine
+third-party server (not a mock) could have surfaced.
+
+## 8. Confirmed via the real `ballerina/a2a` client, not just curl/the Java `TestClient`
+
+With §6 and §7's fixes both applied, `bal test --sticky --groups interop`
+(`A2A_DICE_AGENT_URL=http://localhost:11000`, placeholder Anthropic key)
+now genuinely exercises `ballerina/a2a`'s `Client` — agent-card resolution,
+`Client` construction, and `sendMessage`/`sendMessageStream` — over all
+three transport bindings against this real server:
+
+```
+[fail] testDiceAgentSendMessageJsonRpc:  A2AInternalError, code=-32603,
+  "Error during task ... execution" (ErrorInfo reason=INTERNAL) — real
+  server-side Anthropic 401, correctly surfaced as a typed A2A error
+[fail] testDiceAgentSendMessageRest:      same, via the REST binding
+[fail] testDiceAgentSendMessageStreamGrpc: TestError — the underlying
+  cause (visible in the stream error) is literally "Received: 'Unauthorized,
+  status code 401' when invoking REST Client method: ...AnthropicRestApi#createMessage"
+```
+
+All three "fail" for the identical reason as every direct-transport probe
+in §4 — the placeholder Anthropic key — which is the *correct*, expected
+outcome without real credentials, not a defect. Every step before the LLM
+call (card resolution, transport selection, request encoding, task
+creation, response/error decoding back into typed `ballerina/a2a` errors)
+worked correctly on all three transports. A real `ANTHROPIC_API_KEY` would
+turn these into 3 passing tests with no other changes — the same posture
+`langgraph`/`adk_currency_agent` are already in.
+
+## 9. Not yet done: an actual successful (non-401) response
+
+The only thing this session couldn't verify, for lack of a real
+`ANTHROPIC_API_KEY`: seeing a genuine dice-roll/prime-check answer come
+back over each transport, rather than a correctly-propagated auth error.
+Whoever picks this up next just needs to set a real key and re-run §8's
+`bal test` invocation — no code changes expected to be necessary.
