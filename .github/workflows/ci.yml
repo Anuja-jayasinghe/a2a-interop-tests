@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout a2a-interop-tests
+        uses: actions/checkout@v4
+        with:
+          path: a2a-interop-tests
+
+      - name: Checkout a2a-ballerina (private, PAT required)
+        uses: actions/checkout@v4
+        with:
+          repository: Anuja-jayasinghe/a2a-ballerina
+          token: ${{ secrets.A2A_BALLERINA_PAT }}
+          path: a2a-ballerina
+
+      - name: Set up Ballerina
+        uses: ballerina-platform/setup-ballerina@v1
+        with:
+          version: 2201.13.4
+
+      - name: Pack and push ballerina/a2a to the local repository
+        working-directory: a2a-ballerina/a2a
+        run: |
+          bal pack
+          bal push --repository=local
+
+      - name: Build the demo package
+        working-directory: a2a-interop-tests/demo
+        run: bal build
+
+      - name: Build the tests package
+        working-directory: a2a-interop-tests
+        run: bal build
