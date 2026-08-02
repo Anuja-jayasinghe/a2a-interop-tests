@@ -195,7 +195,66 @@ key — recorded here for anyone picking this back up with a real key to
 re-verify whether they're still present, and potentially worth a TCK issue
 upstream.
 
-## 6. Not yet done: real interop tests / demo run against a real Claude response
+## 6. `ballerina/a2a`'s local package needed a repack+push to pick up gRPC support, which then surfaced a real `ballerina/http`/`ballerina/grpc` version skew in this repo
+
+`tests/dice_agent_interop_test.bal` (added this session) initially failed to
+*compile* with `incompatible types: expected 'TransportBinding', found
+'string'` on `binding = "GRPC"` — not a bug in the test, but because the
+**locally published** `ballerina/a2a` package (`bal push --repository=local`,
+consumed by this repo per `REPO_MAP.md` §1) was stale: its `TransportBinding`
+union was still `"JSONRPC"|"HTTP+JSON"` only, missing `"GRPC"` entirely, even
+though the `a2a-ballerina` source checkout on disk already has it. Fixed with
+the standard `bal pack && bal push --repository=local` workflow
+(`DEMO_GUIDE.md` §2) from `a2a-ballerina/a2a`.
+
+That repack was the **first time this repo's dependency graph actually
+loaded `ballerina/grpc` at runtime** (previously-published package never
+referenced it). Doing so surfaced a separate, pre-existing problem: this
+repo's `Dependencies.toml` already had `ballerina/http` resolved to `2.16.6`
+(from work predating this session), but `ballerina/grpc 1.14.7` was compiled
+against `http ~2.14.13` — a real binary incompatibility, not a semver
+conflict the resolver catches at build time:
+
+```
+java.lang.IllegalAccessError: class ballerina.grpc.1.log_manager tried to
+access method 'HttpLogManager.<init>(...)' — incompatible class versions
+```
+
+`bal build` compiles and type-checks cleanly regardless (confirmed: all
+three new tests build with no errors against the gRPC-enabled client API).
+The failure only appears at **test runtime**, once the `grpc` module's own
+`init()` actually runs.
+
+**Attempted fix, did not work**: adding an explicit
+`[[dependency]] {org="ballerina", name="http", version="2.14.13"}` block to
+`Ballerina.toml` to pin the transitive version. Confirmed via
+`Dependencies.toml` after a full clean rebuild (both `--offline` and
+online) that the pin has no effect — `http` still resolves to `2.16.6` with
+no `pinned = true` marker in the lock file. `http` isn't directly imported
+by this project (only transitively via `a2a` and `grpc`), and Ballerina's
+diamond-dependency resolution appears to pick the highest version any
+requester in the graph is compatible with, regardless of an explicit
+`[[dependency]]` entry for a package that isn't directly `import`ed —
+different from how a direct dependency's version pin behaves. Reverted the
+ineffective pin rather than leave dead configuration in place.
+
+**Net effect**: the three new tests (`testDiceAgentSendMessageJsonRpc`,
+`testDiceAgentSendMessageRest`, `testDiceAgentSendMessageStreamGrpc`) are
+written, compile, and type-check correctly against the real gRPC-capable
+`a2a:Client` API — but running `bal test --groups interop` in *this*
+environment currently fails at the `grpc` module's own init, for every test
+in the suite (confirmed: even the pre-existing, previously-passing
+`testInteropSendMessage` against `helloworld` now hits the same error,
+since the whole package now transitively pulls in `grpc`). This is a
+Ballerina package-resolution issue, not a defect in `ballerina/a2a`'s gRPC
+binding code or in these tests. Whoever picks this up next should either
+find the correct way to force a compatible `http`/`grpc` pairing (possibly
+requires an explicit `import ballerina/http` in this package to make the
+pin take effect, or a `ballerina/grpc` release built against a newer
+`http`), or reproduce this in a clean environment to rule out something
+specific to this session's Ballerina distribution/cache state.
+
+## 7. Not yet done: real interop tests / demo run against a real Claude response
 
 This session verified the *plumbing* (§3-4) and the *server's own spec
 conformance* (§1-2, §5) but did not run `ballerina/a2a`'s actual client
