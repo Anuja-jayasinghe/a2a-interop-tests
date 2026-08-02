@@ -207,7 +207,7 @@ Full details: [`servers/helloworld/setup.md`](servers/helloworld/setup.md).
 
 This agent is Google-ADK-based, but ADK has pluggable model backends and
 this repo runs it on Claude by default — one Anthropic key covers both
-currency agents. Three changes make that work in
+currency agents. Four changes make that work in
 `path\to\a2a-samples\samples\python\agents\adk_currency_agent` (already
 applied if you're working from this repo's own checkout; needed from a
 fresh `a2a-samples` clone):
@@ -250,6 +250,18 @@ fresh `a2a-samples` clone):
    'Use "completed" once the conversion has been answered, "input-required" when you need '
    'the user to supply more information (e.g. a missing target currency), and "failed" only '
    'if a tool call errored.'
+   ```
+5. **`main.py`'s startup check still required `GOOGLE_API_KEY`
+   unconditionally** — a leftover from before this agent ran on Claude,
+   never updated when step 2 switched the model to `AnthropicLlm`. Left
+   as-is, the server refuses to start with only `ANTHROPIC_API_KEY` set:
+   `GOOGLE_API_KEY must be set`. Fix `start_server`'s check to accept
+   either key:
+
+   ```python
+   if not os.getenv('ANTHROPIC_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+       logger.error('ANTHROPIC_API_KEY (or GOOGLE_API_KEY, if using Gemini) must be set')
+       sys.exit(1)
    ```
 
 Then bring it up:
@@ -344,14 +356,16 @@ This walks through `resolveAgentCard`, one `sendMessage`, one
 `sendMessageStream` (printing events live), then an interactive loop —
 type a line, press Enter, see it streamed back; `quit` to exit.
 
-**Works against either agent, unmodified.** `demo/main.bal`'s `serverUrl()`
-function has one `return` line active and one commented out — to switch
-which agent the demo targets, open `demo/main.bal`, comment out the
-active line and uncomment the other, then just `bal run` again:
+**Works against any of the three agents, unmodified.** `demo/main.bal`'s
+`serverUrl()` function has one `return` line active and the other two
+commented out — to switch which agent the demo targets, open
+`demo/main.bal`, comment out the active line and uncomment the one you
+want, then just `bal run` again:
 
 ```ballerina
-return "http://127.0.0.1:9999";     // helloworld (v1.0)
-// return "http://localhost:10999"; // adk_currency_agent (v0.3)
+//return "http://127.0.0.1:9999";     // helloworld (v1.0)
+//return "http://localhost:10999"; // adk_currency_agent (v0.3)
+return "http://localhost:10000"; // langgraph currency agent (v0.3) -- recommended
 ```
 
 The demo always passes the resolved `AgentCard` into the `Client`
@@ -361,20 +375,11 @@ same output format, no code branching, regardless of which line is
 active.
 
 `A2A_DEMO_SERVER_URL`, if set, still overrides whichever line is active —
-useful for scripting or CI without editing the file, and it's how you
-point the demo at the `langgraph` agent, since that agent isn't one of
-`serverUrl()`'s two hardcoded lines:
+useful for scripting or CI without editing the file:
 
 ```bat
 cd demo
 set A2A_DEMO_SERVER_URL=http://localhost:10000
-bal run
-```
-
-```bat
-:: or against adk_currency_agent, without editing the file
-cd demo
-set A2A_DEMO_SERVER_URL=http://localhost:10999
 bal run
 ```
 

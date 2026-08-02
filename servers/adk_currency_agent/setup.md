@@ -7,8 +7,21 @@ set it up from a checkout of `a2a-samples` alongside this one.
 ## Prerequisites
 
 - [`uv`](https://github.com/astral-sh/uv) package manager.
-- A valid Google API Key with access to Gemini models. The server refuses to
-  start without one (`GOOGLE_API_KEY` unset exits immediately).
+- This repo runs the agent on **Claude by default** (an Anthropic API key)
+  rather than Gemini, to sidestep Gemini's free-tier quota walls — see
+  DEMO_GUIDE.md §3 for the three `agent.py` patches that make that work,
+  plus a fourth in `main.py` (below). Gemini (`GOOGLE_API_KEY`) still works
+  if you revert those patches — see DEMO_GUIDE.md §3's "Using Gemini
+  instead".
+- `main.py`'s startup check originally required `GOOGLE_API_KEY`
+  unconditionally, even when the agent is configured to run on Claude —
+  see [`findings.md`](./findings.md) §7. Patch it to accept either key:
+
+  ```python
+  if not os.getenv('ANTHROPIC_API_KEY') and not os.getenv('GOOGLE_API_KEY'):
+      logger.error('ANTHROPIC_API_KEY (or GOOGLE_API_KEY, if using Gemini) must be set')
+      sys.exit(1)
+  ```
 
 ## Quick start
 
@@ -18,7 +31,7 @@ set it up from a checkout of `a2a-samples` alongside this one.
    ```bash
    cd servers/adk_currency_agent
    cp .env.example .env
-   # edit .env, set GOOGLE_API_KEY to a real key with Gemini access
+   # edit .env, set ANTHROPIC_API_KEY (or GOOGLE_API_KEY, for Gemini)
    ```
 
 2. Install dependencies and run the server, loading `.env`:
@@ -31,8 +44,9 @@ set it up from a checkout of `a2a-samples` alongside this one.
    ```
 
    (`set -a` exports every variable `source` picks up, so `ENV` and
-   `GOOGLE_API_KEY` both land in the process environment without editing
-   the file's syntax — it's a plain `KEY=value` file, not a shell script.)
+   `ANTHROPIC_API_KEY`/`GOOGLE_API_KEY` both land in the process
+   environment without editing the file's syntax — it's a plain
+   `KEY=value` file, not a shell script.)
 
 Listens on `http://localhost:10999`.
 
