@@ -75,28 +75,67 @@ All 9 spec-defined A2A error codes (-32001…-32009: `TaskNotFound`, `TaskNotCan
 `VersionNotSupported`) map 1:1 to typed `A2AError` subtypes, with an `A2AInternalError`
 fallback that preserves the original code for anything unrecognized. No gaps.
 
-## 4. Confirmed client-side gaps (the library's own design doc is honest about these — §12.1)
+## 4. Client-side gaps — status as of this pass (corrected; this section was stale)
 
-1. **`A2A-Extensions` header not implemented at all.** Extension negotiation
-   (advertise/request via that header) is a real spec mechanism with zero code behind it.
+**This section previously listed six items as unimplemented that have since actually been
+built** (in later work sessions, each with its own design spec under
+`a2a-ballerina/a2a/docs/superpowers/specs/`) — this file just was never updated to match.
+Verified directly against current source below, not just against the design doc's own
+claims. Only one item here is a genuine, still-open gap (#6, mTLS).
+
+1. ~~**`A2A-Extensions` header not implemented at all.**~~ **Resolved.** The client sends
+   `A2A-Extensions` on requests that declare extensions and captures the server's granted
+   extensions from the response header — `captureGrantedExtensions` (JSON-RPC/REST,
+   `client.bal:535`) and `captureGrantedExtensionsFromGrpc` (gRPC metadata,
+   `client.bal:775`).
 2. ~~**JSON-RPC only — no gRPC or REST transport binding.**~~ **Resolved.**
-   `Client.init`'s `binding` parameter now speaks all three (`"JSONRPC"`,
-   `"HTTP+JSON"`, `"GRPC"`), satisfying spec §5's functional-equivalence
-   requirement, and all three are verified end-to-end against a real
-   server (`servers/dice_agent/`) — see punch-list item 2 below and
-   `servers/dice_agent/findings.md` for the full evidence.
-3. **AgentCard signature (JWS) is captured but never cryptographically verified.** A
-   forged/compromised card would go undetected. Explicitly deferred pending a security
-   review.
-4. **No AgentCard caching** — `resolveAgentCard` re-fetches every call, ignoring HTTP
-   cache headers. Low severity.
-5. **No automatic SSE reconnection** — `subscribeToTask` supports manual reconnect, but
-   the client won't detect a dropped stream and retry on its own.
-6. **No automatic client-auth wiring from a parsed AgentCard** — a developer has to read
-   `card.securitySchemes` themselves and hand-build `http:ClientConfiguration.auth`; no
-   helper goes scheme → working auth config automatically.
-7. **mTLS is a reserved-but-stubbed interface** — explicitly "out of scope, needs a
-   security review before implementing" per the design doc.
+   `Client.init`'s `binding` parameter speaks all three (`"JSONRPC"`, `"HTTP+JSON"`,
+   `"GRPC"`), satisfying spec §5's functional-equivalence requirement, and all three are
+   verified end-to-end against a real server (`servers/dice_agent/`) — see punch-list
+   item 2 below and `servers/dice_agent/findings.md` for the full evidence.
+3. ~~**AgentCard signature (JWS) is captured but never cryptographically verified.**~~
+   **Resolved, with one documented, real limitation.** `verifyAgentCardSignature`
+   (`signature.bal:92`, RFC 7515, RS256/ES256) is implemented and fail-closed — a
+   forged/tampered card is never falsely accepted. **The limitation**: it does not perform
+   RFC 8785 JSON Canonicalization (JCS), which spec §8.4.1 requires before computing the
+   signing input, so it only verifies signatures computed over Ballerina's own
+   `toJsonString()` serialization — not signatures from a real external signer (e.g. a
+   Python or Java reference implementation using a proper JCS canonicalizer). Deliberately
+   not implemented yet: doing JCS correctly (recursive Unicode-code-point key sorting,
+   ECMAScript-compatible number formatting, ECMA-262 string escaping) is intricate enough,
+   especially with `AgentCard`'s open `json...` fields able to carry arbitrary data, that a
+   partial/incorrect implementation risked silently wrong verification results — judged
+   worse than the current, honestly-documented gap. This is the one item on this list
+   that's genuinely still incomplete, not fully closed.
+4. ~~**No AgentCard caching.**~~ **Resolved, as an opt-in.** `resolveAgentCardCached`
+   respects HTTP caching headers (ETag/If-None-Match, Cache-Control/max-age) and reuses
+   the cached body on a `304`. `resolveAgentCard` itself is unchanged and still fetches
+   fresh every call — intentional, for callers who always want the latest card.
+5. ~~**No automatic SSE reconnection.**~~ **Resolved, as an opt-in.**
+   `subscribeToTask`/`sendMessageStream` take a `maxReconnectAttempts` parameter
+   (default `0`, preserving old behavior exactly); set positive, the client detects a
+   dropped stream and resubscribes on the caller's behalf up to that many times before
+   surfacing the error.
+6. ~~**No automatic client-auth wiring from a parsed AgentCard.**~~ **Resolved for the
+   schemes that can be.** `buildAuthFromCard` (`auth.bal:41`) goes
+   `card.securityRequirements` → working `http:ClientConfiguration.auth`/headers
+   automatically, but **deliberately scoped to `ApiKeySecurityScheme` and
+   `HttpAuthSecurityScheme` only** — both reduce to "one credential string the caller
+   already has." OAuth2 and OpenID Connect need a token-acquisition flow, and mutual TLS
+   needs a client certificate; none of those reduce to a single string, so a caller still
+   wires those through `clientConfig` directly, same as before — not an oversight, a
+   real scope boundary (a helper that pretends to auto-handle a multi-step OAuth flow
+   would be worse than no helper). Also only reads `card.securityRequirements`
+   (top-level) — a card that declares security only at the per-`AgentSkill` level isn't
+   auto-wired yet; a real, narrower remaining gap.
+7. **mTLS is a reserved-but-stubbed interface — still genuinely open.** Explicitly
+   deferred pending a security review before implementing, per the design doc. This is
+   the real reason, not a placeholder excuse: client-certificate handling (where the
+   cert/key material comes from, how it's validated, what mutual-auth failure should look
+   like to a caller) has actual security consequences if gotten wrong, and nobody with
+   the right expertise has done that review yet. Unlike the JWS/auth-wiring items above,
+   there's no interim "does most of the job, one documented edge case" version here —
+   it's all-or-nothing, so it stays a hard stub until that review happens.
 
 ## 5. Test coverage gaps (already tracked in `CLIENT_TEST_COVERAGE.md` — listed here only for completeness, don't re-derive)
 
@@ -115,50 +154,62 @@ still copy dead/incorrect patterns from it (it contains field names the doc itse
 as wrong, e.g. a phantom `TaskArtifactUpdateEvent.index`). Purely an organizational issue
 — worth deleting or moving to an archive file, not a code defect.
 
-## Client-hardening punch list (this round's scope)
+## Client-hardening punch list — status (most of this round's original scope is now done)
 
-Ranked by how much each blocks a developer trusting this client to reliably discover and
-call other A2A agents in production:
+Originally ranked by how much each blocks a developer trusting this client to reliably
+discover and call other A2A agents in production. Kept here as a record of what was
+tracked and closed, not as a current to-do list — only #6 and #7 remain genuinely open.
 
-1. **`A2A-Extensions` header support** — real spec mechanism (advertise/request via the
-   header), currently zero code.
-2. **REST and gRPC transport bindings — closed.** Client-side code for both exists
-   (`Client.init`'s `binding` parameter accepts `"HTTP+JSON"`/`"GRPC"`; spec §5's
-   functional-equivalence requirement is implemented), and what was missing — a real,
-   independently-built REST/gRPC-serving agent to test against, rather than only mocks —
-   is now `servers/dice_agent/` (Java/Quarkus, on Claude); see `FINDINGS.md`'s coverage-gap
-   sections and `servers/dice_agent/findings.md` for full status. `ballerina/a2a`'s real
-   `Client` confirmed passing end-to-end over all three transports against this agent, with
-   a real Anthropic key and genuine dice-roll/prime-check responses
-   (`bal test --sticky --groups interop`, 3/3 passing). No longer mock-only.
-3. **AgentCard signature (JWS) verification** — captured (`AgentCardSignature`,
-   `types.bal:503`), never cryptographically verified. A forged/compromised card would go
-   undetected.
-4. **Automatic client-auth wiring from `AgentCard.securitySchemes`** — a developer
-   currently has to read `card.securitySchemes` (`types.bal:159`) themselves and
-   hand-build `http:ClientConfiguration.auth`; no helper goes scheme → working auth
-   config automatically.
-5. **Automatic SSE reconnection** — `subscribeToTask`/`sendMessageStream` support manual
-   reconnect only; the client won't detect a dropped stream and retry itself.
-6. **AgentCard caching** — `resolveAgentCard` re-fetches every call, ignoring HTTP cache
-   headers.
-7. **Close the achievable test-coverage gaps** (§5) — the ones that don't require a live
-   third-party server: file/data `Part` variant round-tripping, `FAILED`/`REJECTED`/
+1. ~~**`A2A-Extensions` header support**~~ — **closed**, see §4.1 above.
+2. ~~**REST and gRPC transport bindings**~~ — **closed**, see §4.2 above and
+   `servers/dice_agent/findings.md` for the real-server evidence (`bal test --sticky
+   --groups interop`, 3/3 passing on `dice_agent`, real Anthropic responses on all three
+   transports).
+3. ~~**AgentCard signature (JWS) verification**~~ — **closed, with one documented
+   limitation** (no JCS canonicalization yet), see §4.3 above.
+4. ~~**Automatic client-auth wiring from `AgentCard.securitySchemes`**~~ — **closed for
+   API-key/HTTP-auth schemes**, see §4.6 above. OAuth2/OIDC/mTLS remain caller-wired by
+   design, not by omission.
+5. ~~**Automatic SSE reconnection**~~ — **closed, opt-in** (`maxReconnectAttempts`), see
+   §4.5 above.
+6. **AgentCard caching** — mostly closed (§4.4 above, `resolveAgentCardCached`), but
+   `resolveAgentCard` — the function every test and demo in this repo actually calls —
+   still always fetches fresh. Genuinely open **as a default-path optimization**: nothing
+   currently in this repo exercises `resolveAgentCardCached` at all, so switching callers
+   over (or at least demonstrating it works against a real server) is real remaining work.
+7. **Close the achievable test-coverage gaps** (§5 above) — the ones that don't require a
+   live third-party server: file/data `Part` variant round-tripping, `FAILED`/`REJECTED`/
    `AUTH_REQUIRED` state handling, `listTasks` filter-parameter encoding. (`listTasks`
    live pagination, `tenant` live, and the delete-push-config success path stay blocked on
    external servers — out of scope for this round.)
 8. **Clean up `A2A_Technical_Design.md`** — remove/archive the superseded
    listener/service draft so new contributors can't mistake it for current guidance.
+   Still open, purely organizational.
+
+**Genuinely still open, in priority order**: mTLS (§4.7 — blocked on a security review,
+not effort), JWS's JCS canonicalization gap (§4.3 — blocked on doing it correctly rather
+than partially), item 6 above (AgentCard caching adoption), item 7 (achievable test gaps),
+item 8 (doc cleanup), and the narrower scope edges called out inline in §4 (skill-level
+`securityRequirements` auto-wiring, full `SecurityScheme` typing beyond the current
+discriminated union).
 
 ## Bottom line
 
-Client-side, against the official spec: solid. All 11 operations exist over all three
-transport bindings the spec requires (JSON-RPC/REST/gRPC), the data model and error codes
-are complete and correctly typed, and the v0.3 legacy dialect is handled transparently.
-The gaps that remain (#1, #3-8 above — #2 is now closed) are real but are
-hardening/completeness work on an already-working client, not missing core
-functionality. See `docs/superpowers/plans/2026-07-30-client-hardening.md` in
-`a2a-ballerina` for the task breakdown to close them.
+Client-side, against the official spec: solid, and considerably more complete than this
+file used to claim. All 11 operations exist over all three transport bindings the spec
+requires (JSON-RPC/REST/gRPC), the data model and error codes are complete and correctly
+typed, the v0.3 legacy dialect is handled transparently, and five of the seven items this
+file previously listed as outright missing (`A2A-Extensions`, JWS verification, AgentCard
+caching, SSE auto-reconnection, automatic client-auth wiring) are actually implemented —
+this report simply hadn't been updated to match `a2a-ballerina`'s own progress. The two
+genuinely open items (mTLS, JWS's JCS canonicalization) are both blocked for real,
+specific reasons — a pending security review and a correctness-risk judgment call,
+respectively — not lack of effort. See
+`docs/superpowers/plans/2026-07-30-client-hardening.md` in `a2a-ballerina` for the
+original task breakdown, and each feature's own doc comment (`auth.bal`, `signature.bal`,
+`client.bal`) for the most current, authoritative status — this file should be treated as
+a snapshot, not a live source of truth, and re-verified against source before being
+trusted for anything high-stakes.
 
 Server/listener support (letting a Ballerina program *be* an A2A agent) is intentionally
 out of scope for this round and will be scoped separately once the client above is done.
