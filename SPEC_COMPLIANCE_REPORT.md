@@ -1,6 +1,6 @@
 # A2A spec compliance audit & wrap-up plan
 
-Full audit of `ballerina/a2a` (`C:\gitProject\A2A_Project\a2a-ballerina\a2a`) against
+Full audit of `ballerina/a2a` (`https://github.com/Anuja-jayasinghe/a2a-ballerina/tree/main/a2a`) against
 the official A2A protocol specification (https://a2a-protocol.org/latest/specification/,
 current release v1.0.0), done from the outside — real reference servers, the published
 spec, and the library's own source — not from the library's internal docs alone.
