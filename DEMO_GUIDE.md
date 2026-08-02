@@ -333,10 +333,11 @@ now.** Loading `ballerina/grpc` (needed for this agent) exposed a real
 without it, the resolver drifts back to a newer, incompatible `http` and
 every test (not just this agent's) fails with an `IllegalAccessError` at
 `grpc` module init. See
-[`servers/dice_agent/findings.md`](servers/dice_agent/findings.md) §6-7 for
-the full diagnosis of this and a second, separate fix that was needed
-(Ballerina's default HTTP/2 client doesn't negotiate h2c correctly against
-this agent's Quarkus dev-mode server).
+[`servers/dice_agent/findings.md`](servers/dice_agent/findings.md) for the
+full diagnosis of this and every other fix that was needed to get here
+(§1-2, §6-7, §9) — with all of them applied and a real Anthropic key, this
+agent's three interop tests pass genuinely, with real dice-roll/
+prime-check responses over gRPC, JSON-RPC, and REST alike.
 
 ### Using Gemini instead (either currency agent)
 

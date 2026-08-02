@@ -316,10 +316,77 @@ worked correctly on all three transports. A real `ANTHROPIC_API_KEY` would
 turn these into 3 passing tests with no other changes — the same posture
 `langgraph`/`adk_currency_agent` are already in.
 
-## 9. Not yet done: an actual successful (non-401) response
+## 9. A real key surfaced one more genuine bug: `protobuf-java-util` wasn't pinned alongside `protobuf-java`
 
-The only thing this session couldn't verify, for lack of a real
-`ANTHROPIC_API_KEY`: seeing a genuine dice-roll/prime-check answer come
-back over each transport, rather than a correctly-propagated auth error.
-Whoever picks this up next just needs to set a real key and re-run §8's
-`bal test` invocation — no code changes expected to be necessary.
+With a real `ANTHROPIC_API_KEY` in place (borrowed from
+`servers/adk_currency_agent/.env`'s Anthropic key, which also works here —
+same account), gRPC passed immediately
+(`testDiceAgentSendMessageStreamGrpc` — a genuine "You rolled a **N**!"
+response, confirmed). JSON-RPC and REST both failed with a **new** error,
+never seen against the placeholder key:
+
+```
+error("{ballerina/lang.value}ConversionError", message="'map<json>' value
+cannot be converted to 'a2a.transport:JsonRpcResponse': missing required
+field 'id' ... field 'details' cannot be added to the closed record ...")
+```
+
+Reproducing directly against the server (bypassing `ballerina/a2a`
+entirely) showed the real cause — a server-side `500`, not a malformed
+response the client merely failed to parse:
+
+```
+$ curl -X POST http://localhost:11000/ -H "A2A-Version: 1.0" -d '{"jsonrpc":"2.0","id":"1","method":"SendMessage",...}'
+500 - Internal Server Error
+java.lang.NoSuchMethodError: 'com.google.protobuf.util.JsonFormat$Printer
+com.google.protobuf.util.JsonFormat$Printer.alwaysPrintFieldsWithNoPresence()'
+	at org.a2aproject.sdk.grpc.utils.JSONRPCUtils.toJsonRPCResultResponse(...)
+	at org.a2aproject.sdk.server.apps.quarkus.A2AServerRoutes.serializeResponse(...)
+```
+
+**Root cause**: §2's fix pinned `com.google.protobuf:protobuf-java` to
+`4.34.2` for the gRPC gencode issue, but left its companion artifact
+`com.google.protobuf:protobuf-java-util` — used by the SDK's own
+JSON-RPC/REST response serializer, via `JsonFormat.Printer` — resolving to
+whatever Quarkus's BOM picks, an older release that predates the
+`alwaysPrintFieldsWithNoPresence()` method the 1.1.0.Final SDK calls. Two
+protobuf artifacts that must stay in lockstep; only pinning one is exactly
+the kind of half-fix that looks done (compiles, gRPC works) but silently
+breaks the other two transports. **Fix**: add the same
+`protobuf-java-util` version override alongside `protobuf-java` in
+`samples/java/agents/pom.xml`'s `dependencyManagement` (see
+[`setup.md`](./setup.md) §1).
+
+## 10. Confirmed: all three transports genuinely pass, with real Claude responses
+
+With §9's fix applied and a real key, `bal test --sticky --groups interop`
+(`A2A_DICE_AGENT_URL=http://localhost:11000`):
+
+```
+[pass] testDiceAgentSendMessageJsonRpc
+[pass] testDiceAgentSendMessageRest
+[pass] testDiceAgentSendMessageStreamGrpc
+
+3 passing
+0 failing
+0 skipped
+```
+
+Direct confirmation of a genuine (non-mocked, non-placeholder) response,
+reproduced via `curl` against the JSON-RPC endpoint:
+
+```json
+{"jsonrpc":"2.0","id":1,"result":{"task":{"id":"...","status":{"state":"TASK_STATE_COMPLETED",...},
+"artifacts":[{"parts":[{"text":"You rolled a **2**!"}]}]}}}
+```
+
+A full run of this repo's entire interop suite, with all four reference
+agents (`helloworld`, `adk_currency_agent`, `langgraph`, `dice_agent`)
+running simultaneously and real credentials for all Claude-backed ones:
+**15 passing, 1 failing** — the single failure being
+`testLangGraphAgentPushNotificationConfigCrud`, the already-documented,
+expected `a2a-sdk==0.3.0` non-conformance on delete
+(`servers/langgraph_agent/findings.md` §5), not a new issue. This closes
+`FINDINGS.md`'s REST and gRPC coverage-gap sections for real: both
+bindings now have genuine, passing, real-server (not mock) coverage,
+matching every other transport/operation already proven in this repo.

@@ -37,9 +37,15 @@ Full reasoning in [`findings.md`](./findings.md) §1-2.
    `org.a2aproject.sdk:1.1.0.Final`** across `server/pom.xml`,
    `client/pom.xml`, and the parent `samples/java/agents/pom.xml` (which
    also needs `protobuf.version` bumped from `4.31.1` to `4.34.2` — the
-   1.1.0.Final gRPC stubs are gencode'd against a newer protobuf runtime).
-   The pinned `0.3.2.Final` SDK's `AgentCard.Builder` only ever emits the
-   legacy `additionalInterfaces` field, never the spec-required
+   1.1.0.Final gRPC stubs are gencode'd against a newer protobuf runtime —
+   **and needs `com.google.protobuf:protobuf-java-util` pinned to the same
+   `4.34.2`**, not just `protobuf-java` alone; left at whatever Quarkus's
+   BOM resolves, every JSON-RPC/REST response fails to serialize with
+   `NoSuchMethodError:
+   JsonFormat$Printer.alwaysPrintFieldsWithNoPresence()` — see
+   findings.md §3 for the full stack trace and fix). The pinned
+   `0.3.2.Final` SDK's `AgentCard.Builder` only ever emits the legacy
+   `additionalInterfaces` field, never the spec-required
    `supportedInterfaces` — see findings.md §1 for the full wire evidence and
    why this genuinely blocks `ballerina/a2a`'s own transport discovery, not
    just TCK conformance.
@@ -114,14 +120,13 @@ bal test --groups interop
 Each call makes a real Claude API call — not a mock, and not free, though
 inexpensive (dice-roll/prime-check questions are short).
 
-## A note on this session's verification
+## Verified
 
-This agent was verified end-to-end in this repo's own environment using a
-**placeholder** `ANTHROPIC_API_KEY`, deliberately, to confirm the plumbing
-without spending real API credits: all three transports (gRPC via the
-sample's own `TestClient`, JSON-RPC and REST via raw `curl`) correctly
-parsed the request, created a task, and reached a genuine
-`401 Unauthorized` from Anthropic's own API — proving the request pipeline
-is correct up to the LLM call boundary on every transport. Swap in a real
-key to see actual dice-roll/prime-check responses; see findings.md §4 for
-the exact evidence from this session.
+This agent was verified end-to-end with a real `ANTHROPIC_API_KEY`, both
+directly (gRPC via the sample's own `TestClient`, JSON-RPC/REST via `curl`)
+and through `ballerina/a2a`'s real `Client`
+(`tests/dice_agent_interop_test.bal`) — all three transports genuinely
+pass, returning real dice-roll/prime-check answers, not mocked or
+auth-gated responses. See findings.md §9-10 for the last fix that was
+needed (a `protobuf-java-util` version pin, alongside `protobuf-java`) and
+the final confirmation evidence.

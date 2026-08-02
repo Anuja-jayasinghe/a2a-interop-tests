@@ -112,18 +112,15 @@ call other A2A agents in production:
 
 1. **`A2A-Extensions` header support** — real spec mechanism (advertise/request via the
    header), currently zero code.
-2. **REST and gRPC transport bindings** — client-side code for both now exists
+2. **REST and gRPC transport bindings — closed.** Client-side code for both exists
    (`Client.init`'s `binding` parameter accepts `"HTTP+JSON"`/`"GRPC"`; spec §5's
-   functional-equivalence requirement is implemented). What was still missing — a real,
+   functional-equivalence requirement is implemented), and what was missing — a real,
    independently-built REST/gRPC-serving agent to test against, rather than only mocks —
    is now `servers/dice_agent/` (Java/Quarkus, on Claude); see `FINDINGS.md`'s coverage-gap
    sections and `servers/dice_agent/findings.md` for full status. `ballerina/a2a`'s real
-   `Client` confirmed working end-to-end over all three transports against this agent
-   (`bal test --sticky --groups interop`), each correctly reaching a real, placeholder-key
-   Anthropic `401` — the request/task-creation/error-decoding pipeline is correct on every
-   transport. Only remaining gap: no real `ANTHROPIC_API_KEY` was available this round to
-   confirm an actual successful (non-401) response — a real key away from fully closed, no
-   further code changes expected.
+   `Client` confirmed passing end-to-end over all three transports against this agent, with
+   a real Anthropic key and genuine dice-roll/prime-check responses
+   (`bal test --sticky --groups interop`, 3/3 passing). No longer mock-only.
 3. **AgentCard signature (JWS) verification** — captured (`AgentCardSignature`,
    `types.bal:503`), never cryptographically verified. A forged/compromised card would go
    undetected.
