@@ -117,12 +117,13 @@ call other A2A agents in production:
    functional-equivalence requirement is implemented). What was still missing — a real,
    independently-built REST/gRPC-serving agent to test against, rather than only mocks —
    is now `servers/dice_agent/` (Java/Quarkus, on Claude); see `FINDINGS.md`'s coverage-gap
-   sections and `servers/dice_agent/findings.md` for full status. All three transports
-   verified directly end-to-end (up to a real, placeholder-key Anthropic `401`) this round;
-   `ballerina/a2a`'s own client against this agent is not yet confirmed passing, blocked on
-   an unrelated `ballerina/http`/`ballerina/grpc` version skew in this repo's build
-   environment (`servers/dice_agent/findings.md` §6) and on a real Anthropic key to see an
-   actual successful response. Not fully closed, but no longer purely mock-verified.
+   sections and `servers/dice_agent/findings.md` for full status. `ballerina/a2a`'s real
+   `Client` confirmed working end-to-end over all three transports against this agent
+   (`bal test --sticky --groups interop`), each correctly reaching a real, placeholder-key
+   Anthropic `401` — the request/task-creation/error-decoding pipeline is correct on every
+   transport. Only remaining gap: no real `ANTHROPIC_API_KEY` was available this round to
+   confirm an actual successful (non-401) response — a real key away from fully closed, no
+   further code changes expected.
 3. **AgentCard signature (JWS) verification** — captured (`AgentCardSignature`,
    `types.bal:503`), never cryptographically verified. A forged/compromised card would go
    undetected.

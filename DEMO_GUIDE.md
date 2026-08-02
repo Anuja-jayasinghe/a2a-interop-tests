@@ -46,7 +46,7 @@ for everything else — it is the one this guide leads with below.
 (`:10000`, `:9999`, `:10999`) and don't share any state, so there's no
 conflict. Give each its own `cmd` window (see §3 for each agent's start
 command), then set all three env vars in a single terminal window and run
-`bal test --groups interop` once to get all 12 interop tests in one pass —
+`bal test --sticky --groups interop` once to get all 12 interop tests in one pass —
 see §4.
 
 ## 1. Prerequisites
@@ -165,7 +165,7 @@ Run its interop tests:
 ```bat
 :: from repo root
 set A2A_LANGGRAPH_AGENT_URL=http://localhost:10000
-bal test --groups interop
+bal test --sticky --groups interop
 ```
 
 `tests/langgraph_agent_interop_test.bal` covers: a real conversion, genuine
@@ -326,13 +326,17 @@ Sanity-check all three transports are advertised:
 curl -s http://localhost:11000/.well-known/agent-card.json
 ```
 
-**Known open issue**: as of this writing, running this agent's interop
-tests via `bal test` in this repo's environment fails at `ballerina/grpc`'s
-own module init, due to a `ballerina/http`/`ballerina/grpc` binary version
-skew unrelated to the agent or the test code itself (both compile and
-type-check correctly). See
-[`servers/dice_agent/findings.md`](servers/dice_agent/findings.md) §6 for
-the full diagnosis — not yet resolved.
+**Important: always pass `--sticky` to `bal build`/`bal test` in this repo
+now.** Loading `ballerina/grpc` (needed for this agent) exposed a real
+`ballerina/http`/`ballerina/grpc` binary version skew — resolved by pinning
+`http` in `Dependencies.toml`, but that pin only holds with `--sticky`;
+without it, the resolver drifts back to a newer, incompatible `http` and
+every test (not just this agent's) fails with an `IllegalAccessError` at
+`grpc` module init. See
+[`servers/dice_agent/findings.md`](servers/dice_agent/findings.md) §6-7 for
+the full diagnosis of this and a second, separate fix that was needed
+(Ballerina's default HTTP/2 client doesn't negotiate h2c correctly against
+this agent's Quarkus dev-mode server).
 
 ### Using Gemini instead (either currency agent)
 
@@ -357,15 +361,15 @@ is a single Ballerina package — `tests/` is not its own package, so run
 :: cancel/subscribe, INPUT_REQUIRED + multi-turn, push-notification CRUD.
 :: Run this one if you only run one.
 set A2A_LANGGRAPH_AGENT_URL=http://localhost:10000
-bal test --groups interop
+bal test --sticky --groups interop
 
 :: helloworld (v1.0) — 5 tests, full operation coverage
 set A2A_TEST_SERVER_URL=http://127.0.0.1:9999
-bal test --groups interop
+bal test --sticky --groups interop
 
 :: adk_currency_agent (v0.3) — 2 tests, proves auto-detection + translation
 set A2A_CURRENCY_AGENT_URL=http://localhost:10999
-bal test --groups interop
+bal test --sticky --groups interop
 
 :: dice_agent (v1.0) — 3 tests, one per transport binding (JSON-RPC, REST,
 :: gRPC) against the same running agent. See servers/dice_agent/setup.md
@@ -373,11 +377,11 @@ bal test --groups interop
 :: a ballerina/http vs ballerina/grpc version skew (findings.md §6), not a
 :: bug in these tests.
 set A2A_DICE_AGENT_URL=http://localhost:11000
-bal test --groups interop
+bal test --sticky --groups interop
 ```
 
 Unlike a POSIX shell, `cmd`'s `set` persists for the rest of that window, so
-once all four are set you can run `bal test --groups interop` once and get
+once all four are set you can run `bal test --sticky --groups interop` once and get
 all 15 interop tests in a single invocation. Expect the currency-agent and
 dice-agent tests to take noticeably longer (10-30+ seconds each) — every
 call is a real LLM round trip (plus a live rate lookup for the currency
