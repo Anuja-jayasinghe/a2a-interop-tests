@@ -12,3 +12,13 @@ org = "ballerina"
 name = "a2a"
 version = "0.1.0"
 repository = "local"
+
+# Pinned to match what ballerina/grpc 1.14.7 (pulled in transitively by
+# a2a's gRPC transport binding) was actually compiled against. See
+# servers/dice_agent/findings.md #6 -- this pin only takes effect combined
+# with http_version_pin.bal's direct import, and only holds with
+# `bal build/run --sticky` (see DEMO_GUIDE.md).
+[[dependency]]
+org = "ballerina"
+name = "http"
+version = "2.14.13"
