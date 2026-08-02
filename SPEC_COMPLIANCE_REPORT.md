@@ -112,10 +112,17 @@ call other A2A agents in production:
 
 1. **`A2A-Extensions` header support** — real spec mechanism (advertise/request via the
    header), currently zero code.
-2. **REST and gRPC transport bindings** — today the client can only reach an agent's
-   JSON-RPC endpoint; `AgentInterface.protocolBinding` is captured in the data model but
-   unusable for anything other than JSON-RPC. Spec §5 requires all three bindings be
-   functionally equivalent. Explicitly in scope for this round (not deferred).
+2. **REST and gRPC transport bindings** — client-side code for both now exists
+   (`Client.init`'s `binding` parameter accepts `"HTTP+JSON"`/`"GRPC"`; spec §5's
+   functional-equivalence requirement is implemented). What was still missing — a real,
+   independently-built REST/gRPC-serving agent to test against, rather than only mocks —
+   is now `servers/dice_agent/` (Java/Quarkus, on Claude); see `FINDINGS.md`'s coverage-gap
+   sections and `servers/dice_agent/findings.md` for full status. All three transports
+   verified directly end-to-end (up to a real, placeholder-key Anthropic `401`) this round;
+   `ballerina/a2a`'s own client against this agent is not yet confirmed passing, blocked on
+   an unrelated `ballerina/http`/`ballerina/grpc` version skew in this repo's build
+   environment (`servers/dice_agent/findings.md` §6) and on a real Anthropic key to see an
+   actual successful response. Not fully closed, but no longer purely mock-verified.
 3. **AgentCard signature (JWS) verification** — captured (`AgentCardSignature`,
    `types.bal:503`), never cryptographically verified. A forged/compromised card would go
    undetected.
