@@ -39,6 +39,15 @@ All 11 methods exist. This closes out what used to be a real gap: git history sh
 opposed to "does the code exist") is already tracked accurately in this repo's
 `CLIENT_TEST_COVERAGE.md` — see that file rather than duplicating it here.
 
+**Not JSON-RPC-only despite the table header** — every method above is reachable over
+all three spec §5 transport bindings (`Client.init`'s `binding` param:
+`"JSONRPC"`/`"HTTP+JSON"`/`"GRPC"`), not just JSON-RPC. `sendMessage` and
+`sendMessageStream` are confirmed passing over all three against a real server
+(`servers/dice_agent/`, see `CLIENT_TEST_COVERAGE.md` row 14); the other 9 methods are
+confirmed passing over JSON-RPC only so far — the transport binding itself is
+protocol-agnostic (same request/response encoding logic regardless of method), so this is
+a coverage-breadth gap, not a suspected functional one.
+
 ## 2. Data model vs. spec
 
 - `Task`, `TaskStatus`, `Message`, `Part`, `Artifact`, `TaskStatusUpdateEvent`,
@@ -70,11 +79,12 @@ fallback that preserves the original code for anything unrecognized. No gaps.
 
 1. **`A2A-Extensions` header not implemented at all.** Extension negotiation
    (advertise/request via that header) is a real spec mechanism with zero code behind it.
-2. **JSON-RPC only — no gRPC or REST transport binding.** Spec §5 requires all three
-   bindings be functionally equivalent; this client can only reach an agent's JSON-RPC
-   endpoint. `AgentInterface.protocolBinding` is captured in the data model (so
-   `primaryUrl` can at least detect and fail clearly on a gRPC-only card), but there's no
-   way to actually speak gRPC or REST.
+2. ~~**JSON-RPC only — no gRPC or REST transport binding.**~~ **Resolved.**
+   `Client.init`'s `binding` parameter now speaks all three (`"JSONRPC"`,
+   `"HTTP+JSON"`, `"GRPC"`), satisfying spec §5's functional-equivalence
+   requirement, and all three are verified end-to-end against a real
+   server (`servers/dice_agent/`) — see punch-list item 2 below and
+   `servers/dice_agent/findings.md` for the full evidence.
 3. **AgentCard signature (JWS) is captured but never cryptographically verified.** A
    forged/compromised card would go undetected. Explicitly deferred pending a security
    review.
@@ -142,12 +152,13 @@ call other A2A agents in production:
 
 ## Bottom line
 
-Client-side, against the official spec: solid. All 11 operations exist, the data model
-and error codes are complete and correctly typed, and the v0.3 legacy dialect is handled
-transparently. The gaps that remain (#1–8 above) are real but are hardening/completeness
-work on an already-working client, not missing core functionality. See
-`docs/superpowers/plans/2026-07-30-client-hardening.md` in `a2a-ballerina` for the task
-breakdown to close them.
+Client-side, against the official spec: solid. All 11 operations exist over all three
+transport bindings the spec requires (JSON-RPC/REST/gRPC), the data model and error codes
+are complete and correctly typed, and the v0.3 legacy dialect is handled transparently.
+The gaps that remain (#1, #3-8 above — #2 is now closed) are real but are
+hardening/completeness work on an already-working client, not missing core
+functionality. See `docs/superpowers/plans/2026-07-30-client-hardening.md` in
+`a2a-ballerina` for the task breakdown to close them.
 
 Server/listener support (letting a Ballerina program *be* an A2A agent) is intentionally
 out of scope for this round and will be scoped separately once the client above is done.

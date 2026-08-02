@@ -9,22 +9,21 @@ yet?" so it shouldn't need re-deriving from scratch each time.
 
 Reference servers used: `helloworld` (v1.0, no credentials) on `:9999`,
 `adk_currency_agent` (v0.3) on `:10999`, `langgraph` currency agent (v0.3)
-on `:10000`. `adk_currency_agent` runs on Gemini by default but has also
+on `:10000`, `dice_agent` (v1.0, Java/Quarkus, REST+gRPC+JSON-RPC) on
+`:11000`. `adk_currency_agent` runs on Gemini by default but has also
 been verified running on Claude (`google.adk.models.anthropic_llm.AnthropicLlm`)
 — see DEMO_GUIDE.md §3's "Optional: run `adk_currency_agent` on Claude
 instead of Gemini" for the 3-line swap (plus a real ADK bug it uncovered
 and worked around: tool functions must return `{"result": ...}`, not a bare
-dict, or Claude silently gets an empty tool result). The `langgraph` agent
-runs **only** on Claude in this repo (`langchain_anthropic.ChatAnthropic`)
-— see `servers/langgraph_agent/setup.md` for the three local patches this
-needed (LangGraph's structured-output mechanism breaks on Claude Opus
-4.6+, a stale Frankfurter endpoint, and a real cancellation bug: the
-executor blocked the whole event loop during each Claude call, and even
-after fixing that, the SDK's hard task-cancellation bypassed the
-cooperative cancel-flag check entirely). Every backend exercises the
-identical A2A surface — the client only speaks A2A protocol to the agent's
-HTTP endpoint, so which LLM answers behind it is invisible to every row
-below. Setup and run instructions: [`DEMO_GUIDE.md`](DEMO_GUIDE.md).
+dict, or Claude silently gets an empty tool result). The `langgraph` and
+`dice_agent` agents run **only** on Claude in this repo
+(`langchain_anthropic.ChatAnthropic` and `quarkus-langchain4j-anthropic`
+respectively) — see `servers/langgraph_agent/setup.md` and
+`servers/dice_agent/setup.md` for the local patches each needed. Every
+backend exercises the identical A2A surface — the client only speaks A2A
+protocol to the agent's endpoint, so which LLM answers behind it is
+invisible to every row below. Setup and run instructions:
+[`DEMO_GUIDE.md`](DEMO_GUIDE.md).
 
 ## Checklist
 
@@ -42,7 +41,8 @@ below. Setup and run instructions: [`DEMO_GUIDE.md`](DEMO_GUIDE.md).
 | 10 | Artifacts | (returned as part of #2–#3, #5) | helloworld, langgraph agent | covered by the tests above | ✅ verified — correct text-part content in both the sync `Task.artifacts[0]` and the streaming `TaskArtifactUpdateEvent` |
 | 11 | Task lifecycle / states | (observed across #2–#3, #6-7) | helloworld, langgraph agent | covered by the tests above | ✅ verified states: `SUBMITTED` → `WORKING` → `COMPLETED` (helloworld, langgraph agent), `CANCELED` (langgraph agent, genuine), `INPUT_REQUIRED` (langgraph agent, genuine — see #13). `FAILED`, `REJECTED`, `AUTH_REQUIRED` remain unexercised |
 | 12 | Protocol v0.3 auto-detection & translation | all of the above, transparently, when `Client` is constructed with `agentCard` | adk_currency_agent (both Gemini- and Claude-backed), langgraph agent (Claude-backed) | `currency_agent_interop_test.bal` (2 tests), `langgraph_agent_interop_test.bal` (5 tests) | ✅ passing on all three — real LLM call + live rate lookup, same client code as v1.0, no caller-visible branching |
-| 13 | `INPUT_REQUIRED` state + multi-turn continuation via `taskId`/`contextId` | `sendMessage` (follow-up carrying the same `taskId`/`contextId`) | langgraph agent | `langgraph_agent_interop_test.bal::testLangGraphAgentInputRequiredThenMultiTurn` | ✅ passing — genuinely model-driven: an incomplete request ("Convert 100 USD", no target currency) gets a real clarifying question, and a follow-up message continuing the same task with just the missing info correctly completes the *same* task (confirmed by matching `task.id`) |
+| 13 | `INPUT_REQUIRED` state + multi-turn continuation via `taskId`/`contextId` | `sendMessage` (follow-up carrying the same `taskId`/`contextId`) | langgraph agent | `langgraph_agent_interop_test.bal::testLangGraphAgentInputRequiredThenMultiTurn`, plus `demo/main.bal`'s interactive loop (live-typed, not automated) | ✅ passing — genuinely model-driven: an incomplete request ("Convert 100 USD", no target currency) gets a real clarifying question, and a follow-up message continuing the same task with just the missing info correctly completes the *same* task (confirmed by matching `task.id`). Also confirmed interactively: typing "Convert 100 dollars" then "to euros" in `demo/main.bal` correctly resumes the same conversation |
+| 14 | Transport bindings — REST (HTTP+JSON) and gRPC, not just JSON-RPC (spec §5) | `Client.init(..., binding = "HTTP+JSON"\|"GRPC")`, `sendMessage`, `sendMessageStream` | dice_agent (the only reference server here that genuinely advertises all three in `supportedInterfaces`) | `dice_agent_interop_test.bal::testDiceAgentSendMessageJsonRpc/Rest/StreamGrpc` | ✅ passing on all three — same message, same client, three different wire protocols, real Claude responses on each. Getting here required 5 real fixes (an `a2a-java-sdk` version migration for a spec-correct agent card, two protobuf version pins, a `ballerina/http`/`ballerina/grpc` version skew, and an HTTP/2-vs-h2c negotiation fix) — full story in `servers/dice_agent/findings.md` |
 
 ## What the client can do that has zero test coverage (real or mock-adjacent)
 
@@ -50,7 +50,9 @@ Closed since the last pass (kept here as a record, not because they're
 still open): **genuine in-flight cancel/resubscribe**, **push-notification
 config success path**, and **multi-turn `contextId` continuation +
 `INPUT_REQUIRED`** — all closed by the `langgraph` currency agent (see
-`servers/langgraph_agent/findings.md`). Still genuinely open:
+`servers/langgraph_agent/findings.md`). **REST and gRPC transport
+bindings** — closed by `dice_agent` (see `servers/dice_agent/findings.md`
+and row 14 above). Still genuinely open:
 
 - **`listTasks` filtering/pagination** — only the no-filter call path was
   tried. `ListTasksFilter`'s `contextId`, `status`, `pageSize`, `pageToken`,
@@ -72,18 +74,28 @@ config success path**, and **multi-turn `contextId` continuation +
 ## How to re-run everything in this table
 
 ```bash
-# from repo root, with helloworld running on :9999
-A2A_TEST_SERVER_URL=http://127.0.0.1:9999 bal test --groups interop
+# from repo root -- --sticky is required now that grpc is a transitive
+# dependency (ballerina/http must stay pinned; see Ballerina.toml)
+A2A_TEST_SERVER_URL=http://127.0.0.1:9999 bal test --sticky --groups interop
+A2A_CURRENCY_AGENT_URL=http://localhost:10999 bal test --sticky --groups interop
+A2A_LANGGRAPH_AGENT_URL=http://localhost:10000 bal test --sticky --groups interop
+A2A_DICE_AGENT_URL=http://localhost:11000 bal test --sticky --groups interop
 
-# with adk_currency_agent running on :10999 (GOOGLE_API_KEY or ANTHROPIC_API_KEY)
-A2A_CURRENCY_AGENT_URL=http://localhost:10999 bal test --groups interop
+# or all four at once, in one cmd window, once all four servers are running:
+set A2A_TEST_SERVER_URL=http://127.0.0.1:9999
+set A2A_CURRENCY_AGENT_URL=http://localhost:10999
+set A2A_LANGGRAPH_AGENT_URL=http://localhost:10000
+set A2A_DICE_AGENT_URL=http://localhost:11000
+bal test --sticky --groups interop
 
-# with the langgraph agent running on :10000 (ANTHROPIC_API_KEY; see
-# servers/langgraph_agent/setup.md for the local patches it needs)
-A2A_LANGGRAPH_AGENT_URL=http://localhost:10000 bal test --groups interop
+# interactive discovery + sendMessage + sendMessageStream + multi-turn walkthrough
+cd demo && bal run --sticky
 
-# interactive discovery + sendMessage + sendMessageStream walkthrough
-cd demo && bal run
+# same request over gRPC, JSON-RPC, and REST against dice_agent
+cd demo_tri_transport && bal run --sticky
 ```
 
-Full setup steps: [`DEMO_GUIDE.md`](DEMO_GUIDE.md).
+Full setup steps: [`DEMO_GUIDE.md`](DEMO_GUIDE.md) and
+[`END_TO_END_RUNBOOK.md`](END_TO_END_RUNBOOK.md) (a from-scratch,
+zero-context walkthrough). Real captured evidence from the latest full run:
+[`VERIFICATION_EVIDENCE.md`](VERIFICATION_EVIDENCE.md).
