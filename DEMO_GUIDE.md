@@ -29,6 +29,7 @@ check, this is it.
 | **`langgraph` currency agent** (Python/LangGraph, `a2a-samples`, on Claude) | v0.3 | `:10000` | Anthropic API key | **Recommended — full-coverage agent.** Genuine in-flight `cancelTask`/`subscribeToTask`, genuine `INPUT_REQUIRED` + multi-turn continuation, genuine push-notification config CRUD, plus everything the other two prove |
 | `helloworld` (Python, `a2a-samples`) | v1.0 | `:9999` | none | The client's native dialect, simplest/fastest sanity check — discovery, `sendMessage`, `sendMessageStream`, `getTask`, `getExtendedAgentCard` |
 | `adk_currency_agent` (Python/Google ADK, `a2a-samples`, on Claude) | v0.3 | `:10999` | Anthropic API key (Gemini also works — see §3) | A second, independent v0.3 dialect example — proves the client's auto-detection/translation isn't tuned to one specific agent |
+| `dice_agent` (Java/Quarkus, `a2a-samples`, on Claude via LangChain4j) | v1.0 | `:11000` | Anthropic API key | **The only agent that genuinely serves REST (HTTP+JSON) and gRPC, not just JSON-RPC** — closes `FINDINGS.md`'s two mock-only transport-binding coverage gaps. See `servers/dice_agent/setup.md` and `findings.md`. |
 
 Both currency agents in this repo are configured to run on **Claude** by
 default — one Anthropic key covers everything. Gemini still works for
@@ -45,7 +46,7 @@ for everything else — it is the one this guide leads with below.
 (`:10000`, `:9999`, `:10999`) and don't share any state, so there's no
 conflict. Give each its own `cmd` window (see §3 for each agent's start
 command), then set all three env vars in a single terminal window and run
-`bal test --groups interop` once to get all 12 interop tests in one pass —
+`bal test --sticky --groups interop` once to get all 12 interop tests in one pass —
 see §4.
 
 ## 1. Prerequisites
@@ -164,7 +165,7 @@ Run its interop tests:
 ```bat
 :: from repo root
 set A2A_LANGGRAPH_AGENT_URL=http://localhost:10000
-bal test --groups interop
+bal test --sticky --groups interop
 ```
 
 `tests/langgraph_agent_interop_test.bal` covers: a real conversion, genuine
@@ -298,6 +299,46 @@ work exists. See
 [`servers/adk_currency_agent/findings.md`](servers/adk_currency_agent/findings.md)
 for the full wire-level evidence.
 
+### `dice_agent` (v1.0, REST + gRPC, on Claude)
+
+The only reference agent here whose `AgentCard.supportedInterfaces`
+genuinely lists `GRPC` and `HTTP+JSON`, not just `JSONRPC` — every other
+agent in this guide is JSON-RPC-only, which is why the REST and gRPC
+transport bindings in `ballerina/a2a` were, until this agent existed,
+mock-verified only (see `FINDINGS.md`). It's Java/Quarkus (not Python like
+the other three), built on the A2A Java SDK and LangChain4j, running on
+Claude via `quarkus-langchain4j-anthropic` — same `ANTHROPIC_API_KEY`
+pattern as the two currency agents.
+
+Full setup (JDK/Maven, the exact local patches needed, and why):
+[`servers/dice_agent/setup.md`](servers/dice_agent/setup.md). Summary:
+
+```bash
+cd path/to/a2a-samples/samples/java/agents/dice_agent_multi_transport/server
+set ANTHROPIC_API_KEY=sk-ant-...
+mvn quarkus:dev
+```
+
+Listens on `http://localhost:11000` — gRPC and HTTP share the one port.
+Sanity-check all three transports are advertised:
+
+```bash
+curl -s http://localhost:11000/.well-known/agent-card.json
+```
+
+**Important: always pass `--sticky` to `bal build`/`bal test` in this repo
+now.** Loading `ballerina/grpc` (needed for this agent) exposed a real
+`ballerina/http`/`ballerina/grpc` binary version skew — resolved by pinning
+`http` in `Dependencies.toml`, but that pin only holds with `--sticky`;
+without it, the resolver drifts back to a newer, incompatible `http` and
+every test (not just this agent's) fails with an `IllegalAccessError` at
+`grpc` module init. See
+[`servers/dice_agent/findings.md`](servers/dice_agent/findings.md) for the
+full diagnosis of this and every other fix that was needed to get here
+(§1-2, §6-7, §9) — with all of them applied and a real Anthropic key, this
+agent's three interop tests pass genuinely, with real dice-roll/
+prime-check responses over gRPC, JSON-RPC, and REST alike.
+
 ### Using Gemini instead (either currency agent)
 
 Both currency agents work on Gemini too if you'd rather not use Claude —
@@ -321,22 +362,31 @@ is a single Ballerina package — `tests/` is not its own package, so run
 :: cancel/subscribe, INPUT_REQUIRED + multi-turn, push-notification CRUD.
 :: Run this one if you only run one.
 set A2A_LANGGRAPH_AGENT_URL=http://localhost:10000
-bal test --groups interop
+bal test --sticky --groups interop
 
 :: helloworld (v1.0) — 5 tests, full operation coverage
 set A2A_TEST_SERVER_URL=http://127.0.0.1:9999
-bal test --groups interop
+bal test --sticky --groups interop
 
 :: adk_currency_agent (v0.3) — 2 tests, proves auto-detection + translation
 set A2A_CURRENCY_AGENT_URL=http://localhost:10999
-bal test --groups interop
+bal test --sticky --groups interop
+
+:: dice_agent (v1.0) — 3 tests, one per transport binding (JSON-RPC, REST,
+:: gRPC) against the same running agent. See servers/dice_agent/setup.md
+:: §"Known open issue" -- currently blocked in this repo's environment by
+:: a ballerina/http vs ballerina/grpc version skew (findings.md §6), not a
+:: bug in these tests.
+set A2A_DICE_AGENT_URL=http://localhost:11000
+bal test --sticky --groups interop
 ```
 
 Unlike a POSIX shell, `cmd`'s `set` persists for the rest of that window, so
-once all three are set you can run `bal test --groups interop` once and get
-all 12 interop tests in a single invocation. Expect the currency-agent
-tests to take noticeably longer (10-30+ seconds each) — every call is a
-real LLM round trip plus a live rate lookup, not a mock.
+once all four are set you can run `bal test --sticky --groups interop` once and get
+all 15 interop tests in a single invocation. Expect the currency-agent and
+dice-agent tests to take noticeably longer (10-30+ seconds each) — every
+call is a real LLM round trip (plus a live rate lookup for the currency
+agents), not a mock.
 
 To unset a var for a later run in the same window: `set A2A_TEST_SERVER_URL=`
 (setting it to nothing removes it).
@@ -417,6 +467,14 @@ tells the actual story:
    `a2a/docs/superpowers/specs/2026-07-28-v03-client-compat-design.md` for
    how the translation actually works under the hood, if the audience wants
    to go deeper.
+6. **Show `dice_agent`'s agent card** (`curl
+   http://localhost:11000/.well-known/agent-card.json`) — point at
+   `supportedInterfaces` listing `GRPC`, `JSONRPC`, and `HTTP+JSON`
+   together, the only agent in this repo that does. This is the "closes
+   the REST/gRPC coverage gap" moment — see `servers/dice_agent/findings.md`
+   for the full story, including the SDK migration that was needed to get
+   a spec-correct card at all, and the open `bal test` runtime blocker
+   (§6 there) if asked about current status.
 
 ## 7. Troubleshooting
 

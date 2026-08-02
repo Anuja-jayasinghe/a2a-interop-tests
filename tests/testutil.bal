@@ -1,6 +1,22 @@
 import ballerina/a2a;
+import ballerina/http;
 import ballerina/os;
 import ballerina/test;
+
+# Exists solely to make this package declare a *direct* dependency on
+# ballerina/http, so its version can be pinned in Ballerina.toml.
+# ballerina/grpc (pulled in transitively via ballerina/a2a's gRPC binding)
+# doesn't declare a Ballerina-level dependency on http at all -- its native
+# Java code calls http's HttpLogManager directly -- so without this,
+# Ballerina.toml's http version pin is silently ignored and the resolver
+# picks whatever's newest on central, which can be binary-incompatible
+# with the grpc module's compiled Java code. See Ballerina.toml's comment
+# on the http [[dependency]] entry.
+#
+# + return - an empty http:ClientConfiguration; never actually called
+isolated function unusedHttpVersionPinAnchor() returns http:ClientConfiguration {
+    return {};
+}
 
 # Base URL for the interop tests. Reads A2A_TEST_SERVER_URL so tests can
 # point at a real reference server; falls back to a placeholder localhost

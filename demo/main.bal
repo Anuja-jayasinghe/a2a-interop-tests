@@ -62,39 +62,81 @@ public function main() returns error? {
     io:println();
 
     io:println("=== Step 3: sendMessageStream ===");
-    check streamOneMessage(agentClient, "Say hello, streaming this time.");
+    TurnResult _ = check streamOneMessage(agentClient, "Say hello, streaming this time.");
     io:println();
 
+    // Real multi-turn continuation, not just independent one-off messages:
+    // when the agent leaves a task in TASK_STATE_INPUT_REQUIRED (a genuine
+    // model-driven clarification, e.g. "which currency?"), the *next* line
+    // typed continues that same task/context instead of starting a fresh
+    // one -- exactly the pattern tests/langgraph_agent_interop_test.bal's
+    // testLangGraphAgentInputRequiredThenMultiTurn already proves works.
+    // Any other outcome (completed, failed, or a fresh top-level question)
+    // starts a brand-new task, same as before.
     io:println("=== Step 4: interactive loop (type 'quit' to exit) ===");
+    string? pendingTaskId = ();
+    string? pendingContextId = ();
     while true {
         string line = io:readln("> ");
         if line == "quit" {
             break;
         }
-        error? streamErr = streamOneMessage(agentClient, line);
-        if streamErr is error {
-            io:println("  [failed] ", describeErrorType(streamErr), ": ", streamErr.message());
+        TurnResult|error turnResult = streamOneMessage(agentClient, line, pendingTaskId, pendingContextId);
+        if turnResult is error {
+            io:println("  [failed] ", describeErrorType(turnResult), ": ", turnResult.message());
+            pendingTaskId = ();
+            pendingContextId = ();
+        } else if turnResult.state == a2a:TASK_STATE_INPUT_REQUIRED {
+            pendingTaskId = turnResult.taskId;
+            pendingContextId = turnResult.contextId;
+        } else {
+            pendingTaskId = ();
+            pendingContextId = ();
         }
     }
 
     io:println("Goodbye.");
 }
 
+# The task/context state carried out of one streamOneMessage call, so the
+# interactive loop can decide whether the next typed line should continue
+# the same task (genuine clarification in progress) or start a fresh one.
+#
+# + taskId - the task this turn ended on, if any
+# + contextId - the matching context for taskId
+# + state - the task's lifecycle state at the end of this turn
+type TurnResult record {|
+    string? taskId;
+    string? contextId;
+    a2a:TaskState? state;
+|};
+
 # Sends one message via sendMessageStream and prints each event live as it
 # arrives, rather than buffering the whole stream before printing anything.
+# Threads taskId/contextId into the outgoing message when continuing a
+# task left in TASK_STATE_INPUT_REQUIRED by a previous call.
 #
 # + agentClient - the client to send through
 # + text - the message text to send
-# + return - an error if the stream itself fails to open or errors mid-stream
-function streamOneMessage(a2a:Client agentClient, string text) returns error? {
+# + taskId - the task to continue, if this is a follow-up to a clarification
+# + contextId - the matching context for taskId
+# + return - the resulting task/context state, or an error if the stream
+#            itself fails to open or errors mid-stream
+function streamOneMessage(a2a:Client agentClient, string text, string? taskId = (), string? contextId = ()) returns TurnResult|error {
     io:println("Outgoing message: ", text);
     a2a:Message msg = {
         messageId: uuid:createType4AsString(),
         role: a2a:ROLE_USER,
-        parts: [{text: text}]
+        parts: [{text: text}],
+        taskId: taskId,
+        contextId: contextId
     };
 
     stream<a2a:StreamResponse, error?> events = check agentClient->sendMessageStream(msg);
+
+    string? lastTaskId = taskId;
+    string? lastContextId = contextId;
+    a2a:TaskState? lastState = ();
 
     while true {
         record {| a2a:StreamResponse value; |}|error? next = events.next();
@@ -104,10 +146,26 @@ function streamOneMessage(a2a:Client agentClient, string text) returns error? {
         }
         if next is error {
             io:println("  [stream error] ", describeErrorType(next), ": ", next.message());
-            break;
+            return next;
         }
-        printEvent(next.value);
+        a2a:StreamResponse event = next.value;
+        printEvent(event);
+
+        a2a:Task? task = event?.task;
+        if task is a2a:Task {
+            lastTaskId = task.id;
+            lastContextId = task?.contextId;
+            lastState = task.status.state;
+        }
+        a2a:TaskStatusUpdateEvent? statusUpdate = event?.statusUpdate;
+        if statusUpdate is a2a:TaskStatusUpdateEvent {
+            lastTaskId = statusUpdate.taskId;
+            lastContextId = statusUpdate.contextId;
+            lastState = statusUpdate.status.state;
+        }
     }
+
+    return {taskId: lastTaskId, contextId: lastContextId, state: lastState};
 }
 
 # Names the concrete A2AError subtype of an error, so a failure printed to
