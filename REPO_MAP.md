@@ -64,12 +64,15 @@ package lives in the `a2a/` subdirectory.
 | `a2a/modules/transport/` | A separate Ballerina submodule: the low-level JSON-RPC envelope types (`JsonRpcRequest`/`JsonRpcResponse`/`JsonRpcError`). Split out specifically to avoid a cyclic module dependency with the root module. |
 | `a2a/tests/` | The full mock-based unit suite: `client_test.bal`, `errors_test.bal`, `sse_test.bal`, `types_test.bal`, `compat_v03_test.bal`, `interop_test.bal` (real-server tests, no-op unless configured), and `testutil.bal` (the scripted mock A2A server every mock-based test drives). |
 | `a2a/docs/A2A_Technical_Design.md` | The original design doc for the whole library — protocol mapping tables, type rationale, testing strategy. |
-| `a2a/docs/superpowers/specs/` | Design specs for individual features, written before implementation. Currently: `2026-07-28-v03-client-compat-design.md`. |
-| `a2a/docs/superpowers/plans/` | Task-by-task implementation plans. Currently: `2026-07-28-a2a-v03-client-compat.md`. |
+| `a2a/docs/superpowers/specs/` | Design specs for individual features, written before implementation: v0.3 client compat, remaining operations, security-scheme typing, REST transport binding, gRPC transport binding. |
+| `a2a/docs/superpowers/plans/` | Task-by-task implementation plans, one per spec above, plus `2026-07-30-client-hardening.md` (extensions header, JWS verification, AgentCard caching, SSE auto-reconnect, automatic client-auth wiring). |
+| `a2a/docs/archive/` | Superseded design drafts, kept for history — currently the original listener/service draft, moved out of `A2A_Technical_Design.md` once it was superseded. |
 | `a2a/LEARNING_LOG.md` | This library's own accumulated lessons (distinct from this repo's `LEARNING_LOG.md`, which is interop-specific). |
 
-**Current size:** 136 tests passing in the `a2a` module, 3 in
-`a2a.transport` — 0 failing.
+**Current size:** 354 tests passing (351 in the `a2a` module, 3 in
+`a2a.transport`) — 0 failing. `git log` in `a2a-ballerina` is the
+authoritative source for exact current numbers; treat this figure as a
+snapshot, not a live count.
 
 ## 3. `a2a-interop-tests` — this repo
 
