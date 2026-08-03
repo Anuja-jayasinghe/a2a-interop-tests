@@ -112,3 +112,26 @@ One file per production concern (`client_test.bal`, `errors_test.bal`, `sse_test
 ---
 
 **Bottom line**: this is a client-only library, deliberately and explicitly (checked in three separate places — `CLAUDE.md`, the design doc's §1.2, and `README.md`'s Roadmap section), with all 11 spec operations working over all three transport bindings and both wire dialects, backed by 354 passing unit tests plus real-server proof in the companion repo. The two genuinely open items (mTLS auto-wiring, JWS's JCS canonicalization) are both documented, deliberate scope boundaries with a stated reason, not unfinished work someone forgot about.
+
+---
+
+## Appendix: which real agents prove which features (from `a2a-interop-tests`)
+
+This library's own 354 tests are mock-based, by design — they gate every
+change fast and deterministically, but only prove the code does what *this
+library* thinks the spec says. Real proof that it works against
+independently-built servers lives entirely in the companion
+`a2a-interop-tests` repo. Reproduced here for one-stop reference (source of
+truth: that repo's `CLIENT_TEST_COVERAGE.md`, keep this copy in sync with
+it, not the other way around):
+
+| Agent | Language / framework | Port | Protocol version | Transport(s) advertised (`supportedInterfaces`/`preferredTransport`) | `capabilities` | LLM backend | What only this agent proves |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| `helloworld` | Python (`a2a-samples`) | `9999` | **v1.0** (native) | `JSONRPC` only | `streaming: true`, `extendedAgentCard: true`, `pushNotifications: false` | none (no LLM call at all) | The client's home-turf dialect, fastest sanity check; the only agent here with `getExtendedAgentCard` genuinely wired to a distinct card, not just declared |
+| `adk_currency_agent` | Python / Google ADK | `10999` | **v0.3** (legacy card shape — top-level `protocolVersion`, no `supportedInterfaces` array at all) | `JSONRPC` (`preferredTransport` only; v0.3 cards predate `supportedInterfaces`) | `streaming: true`, `pushNotifications: false` | Claude (`AnthropicLlm`) by default in this repo, Gemini also supported | A **second, independently-built** v0.3 implementation (different framework than `langgraph`) — proves the client's v0.3 auto-detection/translation isn't accidentally tuned to one specific agent's quirks |
+| `langgraph` currency agent | Python / LangGraph | `10000` | **v0.3** | `JSONRPC` (`preferredTransport` only) | `streaming: true`, `pushNotifications: true` | Claude only, in this repo | The richest agent here: processes tasks slowly enough (real multi-second Claude + tool call) to genuinely exercise **in-flight** `cancelTask`/`subscribeToTask` — every other agent is already terminal by the time the client sees it — plus genuine `INPUT_REQUIRED` multi-turn and real push-notification config CRUD |
+| `dice_agent` | Java / Quarkus (`a2a-java-sdk` 1.1.0.Final) | `11000` | **v1.0**, on all three interfaces | `GRPC`, `JSONRPC`, **and** `HTTP+JSON` — the only agent here whose card genuinely lists all three | `streaming: true`, `pushNotifications: false`, `extendedAgentCard: false` | Claude only (LangChain4j `quarkus-langchain4j-anthropic`) | The **only** agent that can test the REST and gRPC transport bindings at all — every other agent here is JSON-RPC-only, so this closes what was otherwise a mock-only gap in *this* library. See `a2a-interop-tests`' `servers/dice_agent/findings.md` for the SDK migration this needed to get a spec-correct card in the first place |
+
+Every agent runs on the same single `ANTHROPIC_API_KEY` where an LLM is
+involved at all (`helloworld` needs no credentials) — one key covers the
+entire matrix.
