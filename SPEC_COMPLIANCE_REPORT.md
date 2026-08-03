@@ -145,20 +145,26 @@ success path blocked by a real `a2a-sdk==0.3.0` server-side bug (not a client bu
 `Message.referenceTaskIds`/`extensions`, `Artifact.extensions` untested; `FAILED`/
 `REJECTED`/`AUTH_REQUIRED` states never exercised against a live server.
 
-## 6. Documentation gap
+## 6. Documentation gap — resolved
 
-`A2A_Technical_Design.md` appends a large superseded draft (the listener/service design,
-skills-authoring guide, worked weather-agent example) below the current, correct client
-design. It's marked `⚠️ SUPERSEDED` but a new contributor skimming top-to-bottom could
-still copy dead/incorrect patterns from it (it contains field names the doc itself flags
-as wrong, e.g. a phantom `TaskArtifactUpdateEvent.index`). Purely an organizational issue
-— worth deleting or moving to an archive file, not a code defect.
+~~`A2A_Technical_Design.md` appends a large superseded draft...~~ **Resolved.** The
+superseded listener/service draft (listener/service design, skills-authoring guide,
+worked weather-agent example) has been moved out to its own file —
+`a2a-ballerina/a2a/docs/archive/A2A_Technical_Design_superseded_listener_draft.md` — and
+`A2A_Technical_Design.md` itself is now a clean, current-only client design doc (776
+lines, ends at §12 with no dangling draft content). Verified directly against source, not
+assumed. One separate, smaller documentation issue found while re-verifying this: parts
+of `A2A_Technical_Design.md` §3's `securitySchemes` note still describe an earlier,
+pre-typed state (`map<json>`) that the actual `types.bal` has since superseded with a
+real discriminated union — a targeted stale passage, not a structural problem like the
+one this section used to describe.
 
 ## Client-hardening punch list — status (most of this round's original scope is now done)
 
 Originally ranked by how much each blocks a developer trusting this client to reliably
 discover and call other A2A agents in production. Kept here as a record of what was
-tracked and closed, not as a current to-do list — only #6 and #7 remain genuinely open.
+tracked and closed, not as a current to-do list — only #6 and #7 remain genuinely open
+(#8 is also now closed).
 
 1. ~~**`A2A-Extensions` header support**~~ — **closed**, see §4.1 above.
 2. ~~**REST and gRPC transport bindings**~~ — **closed**, see §4.2 above and
@@ -182,9 +188,8 @@ tracked and closed, not as a current to-do list — only #6 and #7 remain genuin
    `AUTH_REQUIRED` state handling, `listTasks` filter-parameter encoding. (`listTasks`
    live pagination, `tenant` live, and the delete-push-config success path stay blocked on
    external servers — out of scope for this round.)
-8. **Clean up `A2A_Technical_Design.md`** — remove/archive the superseded
-   listener/service draft so new contributors can't mistake it for current guidance.
-   Still open, purely organizational.
+8. ~~**Clean up `A2A_Technical_Design.md`**~~ — **closed**, see §6 above. The superseded
+   draft is archived out to its own file; the main design doc is now clean.
 
 **Genuinely still open, in priority order**: mTLS (§4.7 — blocked on a security review,
 not effort), JWS's JCS canonicalization gap (§4.3 — blocked on doing it correctly rather
@@ -203,8 +208,11 @@ file previously listed as outright missing (`A2A-Extensions`, JWS verification, 
 caching, SSE auto-reconnection, automatic client-auth wiring) are actually implemented —
 this report simply hadn't been updated to match `a2a-ballerina`'s own progress. The two
 genuinely open items (mTLS, JWS's JCS canonicalization) are both blocked for real,
-specific reasons — a pending security review and a correctness-risk judgment call,
-respectively — not lack of effort. See
+specific reasons, not lack of effort: mTLS's data model is fully typed
+(`MutualTlsSecurityScheme`) but a client certificate isn't a single credential string the
+way API-key/HTTP-auth are, so it's deliberately left caller-wired rather than half-automated;
+JWS's gap is a correctness-risk judgment call — a partial/incorrect JCS implementation was
+judged worse than the current, honestly-documented limitation. See
 `docs/superpowers/plans/2026-07-30-client-hardening.md` in `a2a-ballerina` for the
 original task breakdown, and each feature's own doc comment (`auth.bal`, `signature.bal`,
 `client.bal`) for the most current, authoritative status — this file should be treated as
