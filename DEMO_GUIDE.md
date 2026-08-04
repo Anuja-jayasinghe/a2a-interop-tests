@@ -27,7 +27,7 @@ check, this is it.
 | Agent | Protocol | Port | Credentials | What it proves |
 | :---- | :---- | :--- | :--- | :---- |
 | **`langgraph` currency agent** (Python/LangGraph, `a2a-samples`, on Claude) | v0.3 | `:10000` | Anthropic API key | **Recommended — full-coverage agent.** Genuine in-flight `cancelTask`/`subscribeToTask`, genuine `INPUT_REQUIRED` + multi-turn continuation, genuine push-notification config CRUD, plus everything the other two prove |
-| `helloworld` (Python, `a2a-samples`) | v1.0 | `:9999` | none | The client's native dialect, simplest/fastest sanity check — discovery, `sendMessage`, `sendMessageStream`, `getTask`, `getExtendedAgentCard` |
+| `helloworld` (Python, `a2a-samples`) | v1.0 | `:9999` | none | The client's native dialect, simplest/fastest sanity check — discovery, `sendMessage`, `sendStreamingMessage`, `getTask`, `getExtendedAgentCard` |
 | `adk_currency_agent` (Python/Google ADK, `a2a-samples`, on Claude) | v0.3 | `:10999` | Anthropic API key (Gemini also works — see §3) | A second, independent v0.3 dialect example — proves the client's auto-detection/translation isn't tuned to one specific agent |
 | `dice_agent` (Java/Quarkus, `a2a-samples`, on Claude via LangChain4j) | v1.0 | `:11000` | Anthropic API key | **The only agent that genuinely serves REST (HTTP+JSON) and gRPC, not just JSON-RPC** — closes `FINDINGS.md`'s two mock-only transport-binding coverage gaps. See `servers/dice_agent/setup.md` and `findings.md`. |
 
@@ -403,7 +403,7 @@ bal run
 ```
 
 This walks through `resolveAgentCard`, one `sendMessage`, one
-`sendMessageStream` (printing events live), then an interactive loop —
+`sendStreamingMessage` (printing events live), then an interactive loop —
 type a line, press Enter, see it streamed back; `quit` to exit.
 
 **Works against any of the three agents, unmodified.** `demo/main.bal`'s
@@ -457,7 +457,7 @@ tells the actual story:
    the "why does this need special handling at all" moment.
 4. **Run `testCurrencyAgentSendMessage`/`testCurrencyAgentSendMessageStream`**
    (§4 above) — same `a2a:Client` type, same `sendMessage`/
-   `sendMessageStream` calls as the `helloworld` demo, just constructed
+   `sendStreamingMessage` calls as the `helloworld` demo, just constructed
    with `agentCard = check a2a:resolveAgentCard(baseUrl)` this time. That
    one extra argument is the entire caller-visible difference between
    talking to a v1.0 and a v0.3 server.

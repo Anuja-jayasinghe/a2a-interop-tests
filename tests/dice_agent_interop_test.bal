@@ -119,7 +119,7 @@ function testDiceAgentSendMessageStreamGrpc() returns error? {
         parts: [{text: "Can you roll a 20-sided die and check if the result is prime?"}]
     };
 
-    stream<a2a:StreamResponse, error?> events = check c->sendMessageStream(msg);
+    stream<a2a:StreamResponse, error?> events = check c->sendStreamingMessage(msg);
 
     boolean sawCompletion = false;
     record {| a2a:StreamResponse value; |}|error? next = events.next();

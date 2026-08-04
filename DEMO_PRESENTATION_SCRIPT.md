@@ -39,7 +39,7 @@ real Anthropic key (this is the richest agent — genuine multi-turn).
 cd demo
 bal run --sticky
 ```
-Let it run through the scripted `sendMessage`/`sendMessageStream` steps,
+Let it run through the scripted `sendMessage`/`sendStreamingMessage` steps,
 then when it drops into the interactive loop, **type live, in front of
 them**, as two separate lines:
 ```

@@ -57,7 +57,7 @@ package lives in the `a2a/` subdirectory.
 | Path | What it is |
 | :--- | :--- |
 | `a2a/types.bal` | The data model: `Task`, `Message`, `Role`, `TaskState`, `Part`, `AgentCard`, `AgentInterface`, `SendMessageConfiguration`, etc. |
-| `a2a/client.bal` | The public `Client` class — `sendMessage`, `sendMessageStream`, `getTask`, `cancelTask`, `subscribeToTask` — plus `resolveAgentCard`/`primaryUrl`. |
+| `a2a/client.bal` | The public `Client` class — `sendMessage`, `sendStreamingMessage`, `getTask`, `cancelTask`, `subscribeToTask` — plus `resolveAgentCard`/`primaryUrl`. |
 | `a2a/errors.bal` | The `A2AError` type hierarchy and the JSON-RPC error-code → typed-error mapping (`toA2AError`). |
 | `a2a/sse.bal` | SSE stream decoding — `A2AStreamGenerator`, `readSseStream`, `isTerminalEvent`. |
 | `a2a/compat_v03.bal` | **The v0.3 compatibility layer** (added this round, ~515 lines). Everything needed to detect and speak the older A2A v0.3 wire format — see §4 below. |
@@ -85,7 +85,7 @@ Root: `C:\gitProject\a2a-interop-tests`.
 | `FINDINGS.md` | Master index: one line per agent tested, linking to its full writeup. |
 | `LEARNING_LOG.md` | Interop-specific lessons (e.g. "reference implementations deviate from spec, verify everything empirically"). |
 | `tests/` | The real interop test suite (its own Ballerina project). `interop_test.bal` (5 tests against `helloworld`), `currency_agent_interop_test.bal` (2 tests against `adk_currency_agent`), `langgraph_agent_interop_test.bal` (5 tests against the langgraph currency agent — genuine in-flight cancel/subscribe, `INPUT_REQUIRED`/multi-turn, push-notification CRUD), `testutil.bal` (shared helpers — `getServerBaseUrl`, `assertValidTask`, `extractArtifactText`). Every test no-ops with a visible `SKIPPED` marker unless its env var is set — nothing here silently skips without saying so. |
-| `demo/` | A separate Ballerina project: an interactive, watchable walkthrough of `Client` — discovery, one-shot `sendMessage`, streaming `sendMessageStream`, then a type-and-see interactive loop. Defaults to `helloworld` (v1.0), but reads `A2A_DEMO_SERVER_URL` and passes the resolved `AgentCard` into `Client`, so it works identically against `adk_currency_agent` (v0.3) too — same code, no branching. |
+| `demo/` | A separate Ballerina project: an interactive, watchable walkthrough of `Client` — discovery, one-shot `sendMessage`, streaming `sendStreamingMessage`, then a type-and-see interactive loop. Defaults to `helloworld` (v1.0), but reads `A2A_DEMO_SERVER_URL` and passes the resolved `AgentCard` into `Client`, so it works identically against `adk_currency_agent` (v0.3) too — same code, no branching. |
 | `servers/helloworld/` | `setup.md` (venv/run instructions, no credentials needed) + `findings.md` (the v1.0 non-conformances found: missing `AgentCard.url`, PascalCase methods, wrapped `SendMessage` response, `subscribeToTask`'s two-fold non-conformance on terminal tasks). |
 | `servers/adk_currency_agent/` | `setup.md` + `findings.md` (the discovery that this agent speaks **v0.3**, not v1.0 — raw wire evidence included) + `.env`/`.env.example` (Gemini or Anthropic API key, git-ignored — never committed). |
 | `servers/langgraph_agent/` | `setup.md` (three local patches needed to run it on Claude) + `findings.md` (first agent to genuinely exercise in-flight `cancelTask`/`subscribeToTask` and real push-notification CRUD; surfaced a real `a2a-sdk==0.3.0` non-conformance on delete, plus a blocking-event-loop cancellation bug fixed in the sample). |
@@ -137,7 +137,7 @@ before any client code was written — see
    branches on which dialect it's talking to — a `Task|Message` comes back
    either way, with the same field names and the same enum values.
 
-4. **Streaming** — `sendMessageStream`/`subscribeToTask` thread the same
+4. **Streaming** — `sendStreamingMessage`/`subscribeToTask` thread the same
    detected mode through `A2AStreamGenerator`, so SSE events get decoded
    the same translated way, event by event.
 

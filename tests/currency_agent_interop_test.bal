@@ -58,7 +58,7 @@ function testCurrencyAgentSendMessageStream() returns error? {
         parts: [{text: "Convert 50 GBP to JPY"}]
     };
 
-    stream<a2a:StreamResponse, error?> events = check c->sendMessageStream(msg);
+    stream<a2a:StreamResponse, error?> events = check c->sendStreamingMessage(msg);
 
     boolean sawCompletion = false;
     record {| a2a:StreamResponse value; |}|error? next = events.next();

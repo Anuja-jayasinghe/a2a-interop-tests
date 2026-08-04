@@ -294,7 +294,7 @@ third-party server (not a mock) could have surfaced.
 With §6 and §7's fixes both applied, `bal test --sticky --groups interop`
 (`A2A_DICE_AGENT_URL=http://localhost:11000`, placeholder Anthropic key)
 now genuinely exercises `ballerina/a2a`'s `Client` — agent-card resolution,
-`Client` construction, and `sendMessage`/`sendMessageStream` — over all
+`Client` construction, and `sendMessage`/`sendStreamingMessage` — over all
 three transport bindings against this real server:
 
 ```

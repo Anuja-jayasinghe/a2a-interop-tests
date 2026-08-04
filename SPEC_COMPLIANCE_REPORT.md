@@ -22,7 +22,7 @@ Everything below is a client-side conformance/completeness audit.
 | Spec method | Client method | Status |
 |---|---|---|
 | SendMessage | `sendMessage` (client.bal:236) | ✅ v1.0 + v0.3 |
-| SendStreamingMessage | `sendMessageStream` (client.bal:356) | ✅ v1.0 + v0.3 |
+| SendStreamingMessage | `sendStreamingMessage` (client.bal:356) | ✅ v1.0 + v0.3 |
 | GetTask | `getTask` (client.bal:392) | ✅ v1.0 + v0.3 |
 | CancelTask | `cancelTask` (client.bal:421) | ✅ v1.0 + v0.3 |
 | SubscribeToTask | `subscribeToTask` (client.bal:455) | ✅ v1.0 + v0.3 |
@@ -42,7 +42,7 @@ opposed to "does the code exist") is already tracked accurately in this repo's
 **Not JSON-RPC-only despite the table header** — every method above is reachable over
 all three spec §5 transport bindings (`Client.init`'s `binding` param:
 `"JSONRPC"`/`"HTTP+JSON"`/`"GRPC"`), not just JSON-RPC. `sendMessage` and
-`sendMessageStream` are confirmed passing over all three against a real server
+`sendStreamingMessage` are confirmed passing over all three against a real server
 (`servers/dice_agent/`, see `CLIENT_TEST_COVERAGE.md` row 14); the other 9 methods are
 confirmed passing over JSON-RPC only so far — the transport binding itself is
 protocol-agnostic (same request/response encoding logic regardless of method), so this is
@@ -112,7 +112,7 @@ claims. Only one item here is a genuine, still-open gap (#6, mTLS).
    the cached body on a `304`. `resolveAgentCard` itself is unchanged and still fetches
    fresh every call — intentional, for callers who always want the latest card.
 5. ~~**No automatic SSE reconnection.**~~ **Resolved, as an opt-in.**
-   `subscribeToTask`/`sendMessageStream` take a `maxReconnectAttempts` parameter
+   `subscribeToTask`/`sendStreamingMessage` take a `maxReconnectAttempts` parameter
    (default `0`, preserving old behavior exactly); set positive, the client detects a
    dropped stream and resubscribes on the caller's behalf up to that many times before
    surfacing the error.

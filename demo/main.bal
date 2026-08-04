@@ -19,8 +19,8 @@ isolated function serverUrl() returns string {
 
     //return "http://127.0.0.1:9999";     // helloworld (v1.0)
     //return "http://localhost:10999"; // adk_currency_agent (v0.3)
-    return "http://localhost:10000"; // langgraph currency agent (v0.3)
-    //return "http://localhost:11000"; // dice_agent (v1.0, JSON-RPC only here -- see demo_tri_transport/ for its REST/gRPC story)
+    //return "http://localhost:10000"; // langgraph currency agent (v0.3)
+    return "http://localhost:11000"; // dice_agent (v1.0, JSON-RPC only here -- see demo_tri_transport/ for its REST/gRPC story)
 }
 
 // dice_agent's Quarkus dev-mode server doesn't negotiate h2c (HTTP/2
@@ -70,7 +70,7 @@ public function main() returns error? {
     }
     io:println();
 
-    io:println("=== Step 3: sendMessageStream ===");
+    io:println("=== Step 3: sendStreamingMessage ===");
     TurnResult _ = check streamOneMessage(agentClient, "Say hello, streaming this time.");
     io:println();
 
@@ -120,7 +120,7 @@ type TurnResult record {|
     a2a:TaskState? state;
 |};
 
-# Sends one message via sendMessageStream and prints each event live as it
+# Sends one message via sendStreamingMessage and prints each event live as it
 # arrives, rather than buffering the whole stream before printing anything.
 # Threads taskId/contextId into the outgoing message when continuing a
 # task left in TASK_STATE_INPUT_REQUIRED by a previous call.
@@ -141,7 +141,7 @@ function streamOneMessage(a2a:Client agentClient, string text, string? taskId = 
         contextId: contextId
     };
 
-    stream<a2a:StreamResponse, error?> events = check agentClient->sendMessageStream(msg);
+    stream<a2a:StreamResponse, error?> events = check agentClient->sendStreamingMessage(msg);
 
     string? lastTaskId = taskId;
     string? lastContextId = contextId;

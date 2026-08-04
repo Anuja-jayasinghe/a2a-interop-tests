@@ -52,7 +52,7 @@ Every spec-defined shape as a Ballerina `record {| ... |}` or `enum`: `Message`,
 
 ## The client — `client.bal` (1412 lines, the whole public surface)
 
-One `isolated class Client` with all 11 spec operations as `isolated remote function`s (`sendMessage`, `sendMessageStream`, `getTask`, `cancelTask`, `subscribeToTask`, `listTasks`, the four push-notification-config CRUD methods, `getExtendedAgentCard`), plus module-level `resolveAgentCard`/`resolveAgentCardCached`/`primaryUrl`/`selectInterface`.
+One `isolated class Client` with all 11 spec operations as `isolated remote function`s (`sendMessage`, `sendStreamingMessage`, `getTask`, `cancelTask`, `subscribeToTask`, `listTasks`, the four push-notification-config CRUD methods, `getExtendedAgentCard`), plus module-level `resolveAgentCard`/`resolveAgentCardCached`/`primaryUrl`/`selectInterface`.
 
 - **One `binding` parameter picks the transport** (`"JSONRPC"` default, `"HTTP+JSON"`, `"GRPC"`) at `Client.init` time. Every remote function funnels through one internal dispatcher (`rpcCall`) that branches on `self.binding` and calls the matching encode/decode path — `buildRestRequest` maps each of the 11 operations onto its REST method/path/query/body shape; the gRPC path defers to `grpc_binding.bal`'s `encodeGrpcRequest`/`decodeGrpcResponse`. A caller's own code never branches on transport.
 - **`resolveAgentCard` always fetches fresh**; `resolveAgentCardCached` is the newer, opt-in ETag/`304`-aware sibling — kept deliberately separate rather than replacing the original, so existing callers who always want the latest card see no behavior change.

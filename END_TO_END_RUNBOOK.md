@@ -189,7 +189,7 @@ being proven live, row by row.
 cd demo
 bal run --sticky
 ```
-Walks through discovery → `sendMessage` → `sendMessageStream`, then drops
+Walks through discovery → `sendMessage` → `sendStreamingMessage`, then drops
 into an interactive loop — type a question, get a real answer. Try leaving
 out required information (e.g. "Convert 100 dollars" with no target
 currency) to see a genuine model-driven clarification, then answer it

@@ -102,7 +102,7 @@ function testLangGraphAgentGenuineInFlightCancel() returns error? {
         role: a2a:ROLE_USER,
         parts: [{text: "What is the exchange rate between USD and NOK?"}]
     };
-    stream<a2a:StreamResponse, error?> events = check c->sendMessageStream(msg);
+    stream<a2a:StreamResponse, error?> events = check c->sendStreamingMessage(msg);
 
     // The "task created" event arrives immediately (before the real
     // Claude/tool round trip starts), giving a real window to cancel a
@@ -136,7 +136,7 @@ function testLangGraphAgentGenuineInFlightSubscribe() returns error? {
         role: a2a:ROLE_USER,
         parts: [{text: "What is the exchange rate between USD and PLN?"}]
     };
-    stream<a2a:StreamResponse, error?> firstStream = check c->sendMessageStream(msg);
+    stream<a2a:StreamResponse, error?> firstStream = check c->sendStreamingMessage(msg);
 
     a2a:StreamResponse first = check expectValue(firstStream.next());
     a2a:Task createdTask = <a2a:Task>first?.task;

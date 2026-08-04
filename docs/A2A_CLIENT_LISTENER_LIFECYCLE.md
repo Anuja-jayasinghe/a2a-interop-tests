@@ -79,7 +79,7 @@ notifications (webhooks) are configured (§6).
 
 ```mermaid
 flowchart TD
-    A["Client.sendMessage() / sendMessageStream()"] --> B["Build Message JSON\n(base64-encode raw byte Parts)"]
+    A["Client.sendMessage() / sendStreamingMessage()"] --> B["Build Message JSON\n(base64-encode raw byte Parts)"]
     B --> C{"self.binding ?"}
     C -->|JSONRPC default| D["wrap in JsonRpcRequest\n{jsonrpc:'2.0', id, method, params}"]
     C -->|HTTP+JSON REST| E["buildRestRequest()\nmap method -> REST_OPERATIONS table\ne.g. SendMessage -> POST /message:send"]
@@ -143,7 +143,7 @@ Only the four states in the bottom-right cluster (`COMPLETED`,
 and `AUTH_REQUIRED` end the *current SSE stream* but leave the task
 itself alive on the listener, addressable later by `taskId` via
 `getTask`, `subscribeToTask`, or a follow-up `sendMessage`/
-`sendMessageStream` carrying the same `taskId`/`contextId`.
+`sendStreamingMessage` carrying the same `taskId`/`contextId`.
 
 ---
 
@@ -272,7 +272,7 @@ human typing at a prompt instead of by another agent:
 
 1. `resolveAgentCard` — discovery (§1 step 1-2)
 2. `sendMessage` — one unary send/response, no streaming
-3. `sendMessageStream` — the full open→push→close cycle from §1 and §4
+3. `sendStreamingMessage` — the full open→push→close cycle from §1 and §4
 4. An interactive loop that continues a task via `taskId`/`contextId`
    whenever a turn ends in `INPUT_REQUIRED` (the "non-terminal close"
    branch of §4), otherwise starts fresh

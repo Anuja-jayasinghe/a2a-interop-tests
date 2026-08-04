@@ -180,7 +180,7 @@ other five remain unverified against any live server.
 | :---- | :---- | :---- | :---- |
 | resolveAgentCard | none | GET /.well-known/agent-card.json | application/json |
 | sendMessage | SendMessage | POST | application/json |
-| sendMessageStream | SendStreamingMessage | POST | text/event-stream |
+| sendStreamingMessage | SendStreamingMessage | POST | text/event-stream |
 | getTask | GetTask | POST | application/json |
 | cancelTask | CancelTask | POST | application/json |
 | subscribeToTask | SubscribeToTask | POST | text/event-stream |

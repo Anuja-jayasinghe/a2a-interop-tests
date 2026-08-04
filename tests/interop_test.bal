@@ -56,7 +56,7 @@ function testInteropSendMessage() returns error? {
     test:assertEquals(extractArtifactText(task.artifacts[0]), "Hello, World! I have received your request (Say hello.)");
 }
 
-# Exercises the full sendMessageStream lifecycle through the real
+# Exercises the full sendStreamingMessage lifecycle through the real
 # A2AStreamGenerator/readSseStream pipeline: task creation, a WORKING
 # status update, an artifact update, a COMPLETED status update, then a
 # clean stream close. Confirmed once by hand against the real server
@@ -77,7 +77,7 @@ function testInteropSendMessageStream() returns error? {
         parts: [{text: "Say hello."}]
     };
 
-    stream<a2a:StreamResponse, error?> events = check c->sendMessageStream(msg);
+    stream<a2a:StreamResponse, error?> events = check c->sendStreamingMessage(msg);
 
     a2a:StreamResponse first = check expectValue(events.next());
     test:assertTrue(first?.task is a2a:Task, "the first event should be the newly created task");
