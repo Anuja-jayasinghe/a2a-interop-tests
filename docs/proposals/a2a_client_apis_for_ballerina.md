@@ -34,8 +34,10 @@ by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
 
 - Hosting an A2A agent (the server/listener side). This proposal is
   client-only; a listener is a separate future proposal.
-- A transport/interceptor plugin system, or per-call request context — noted
-  under Future Plans rather than designed here.
+- A transport/interceptor plugin system, per-call request context (timeout,
+  headers), and RFC 8785 JCS canonicalization for cross-implementation
+  signature verification — real gaps versus the Python reference client, but
+  larger design questions left for separate follow-up proposals.
 
 ## Motivation
 
@@ -159,7 +161,13 @@ import ballerina/io;
 public function main() returns error? {
     string url = "https://weather-agent.example.com";
 
+    // newClient accepts either a URL or an already-resolved AgentCard —
+    // pass whichever you have; only one is ever needed.
     a2a:Client agentClient = check a2a:newClient(url);
+
+    // equivalent, if the card was already resolved for some other reason:
+    // a2a:AgentCard card = check a2a:resolveAgentCard(url);
+    // a2a:Client agentClient = check a2a:newClient(card);
 
     a2a:Message request = {
         role: "user",
@@ -171,27 +179,9 @@ public function main() returns error? {
 }
 ```
 
-## Future Plans
-
-- **Interceptor pipeline** — a `before`/`after` middleware seam for auth,
-  tracing, and logging, akin to `httpx`-style interceptors. Currently
-  `http:ClientConfiguration` (retry, circuit breaker, timeouts, pooling)
-  covers most of what this would provide.
-- **Per-call request context** — per-call timeout and headers, not just
-  construction-time defaults.
-- **RFC 8785 JCS canonicalization** for cross-implementation signature
-  verification, so a card signed by another A2A implementation can be
-  verified (today, only signatures over this library's own serialization
-  verify).
-- **Listener/server-side support**, once client-side coverage is stable —
-  letting a Ballerina service host an A2A agent, not just call one.
-
 ## Conclusion
 
 This proposal introduces the first Ballerina client for the A2A protocol,
 covering all client-side spec operations across three transport bindings with
 a single, idiomatic API that constructs from either a URL or an
-already-resolved card. It intentionally scopes out server-side
-support and a small set of larger design questions (interceptors, per-call
-context, cross-implementation signature verification), tracked above as
-follow-up work once this client foundation lands.
+already-resolved card.
