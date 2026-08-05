@@ -73,8 +73,40 @@ generator.
 `resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`;
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 `verifyAgentCardSignature` checks a card's embedded JWS signature (RS256/ES256)
-before it's trusted. The resolved card drives protocol-version detection
-(1.0 vs. 0.3) and, when credentials are supplied, authentication.
+before it's trusted. Parsing also normalises legacy (pre-1.0) card shapes —
+synthesising `supportedInterfaces` from the older `url` /
+`preferredTransport` / `additionalInterfaces` fields — so an agent that only
+declares a transport that way is still reachable. The resolved card drives
+protocol-version detection (1.0 vs. 0.3) and, when credentials are supplied,
+authentication.
+
+### Client construction
+
+The card is the primary input; the client is built directly from it rather
+than requiring the caller to separately derive and pass its URL:
+
+```ballerina
+a2a:AgentCard card = check a2a:resolveAgentCard(url);
+a2a:Client agentClient = check a2a:newClientFromCard(card);
+
+// or, when only the URL is known up front:
+a2a:Client agentClient = check a2a:newClientFromUrl(url);
+```
+
+`newClientFromCard`/`newClientFromUrl` derive the service URL from the card
+internally, via the interface `selectInterface(card, binding)` picks. Selection
+prefers `protocolVersion 1.0`, then newer, then `0.3`+, then unversioned — not
+just the first entry that matches the requested binding, so the ordering of a
+card's `supportedInterfaces` can't silently downgrade the protocol version
+used. If the selected interface declares a `tenant`, it's read automatically
+instead of requiring the caller to copy it by hand; an explicitly-passed
+`tenant` still wins.
+
+The existing positional constructor, `new (serviceUrl, ..., agentCard = card)`,
+remains available as an escape hatch for the cases where the client
+genuinely needs to point at a different URL than the one the card declares —
+proxies, tests, or a card with several interfaces where a non-preferred one is
+wanted deliberately.
 
 ## Design Strategy
 
@@ -118,8 +150,7 @@ public function main() returns error? {
     string url = "https://weather-agent.example.com";
 
     a2a:AgentCard card = check a2a:resolveAgentCard(url);
-    string baseUrl = check a2a:primaryUrl(card, "JSONRPC");
-    a2a:Client agentClient = check new (baseUrl, agentCard = card);
+    a2a:Client agentClient = check a2a:newClientFromCard(card);
 
     a2a:Message request = {
         role: "user",
@@ -133,16 +164,16 @@ public function main() returns error? {
 
 ## Future Plans
 
-- **Card-first construction** — `newClientFromCard`/`newClientFromUrl`
-  factories that derive the service URL from the card instead of requiring it
-  as a separate argument.
-- **Tenant auto-wiring and version-aware interface selection** — reading
-  `tenant` and preferring `protocolVersion 1.0` from the card automatically
-  instead of requiring the caller to pick.
-- **Legacy card normalisation** — synthesising `supportedInterfaces` from
-  older card shapes so pre-1.0 agents are fully reachable.
+- **Interceptor pipeline** — a `before`/`after` middleware seam for auth,
+  tracing, and logging, akin to `httpx`-style interceptors. Currently
+  `http:ClientConfiguration` (retry, circuit breaker, timeouts, pooling)
+  covers most of what this would provide.
+- **Per-call request context** — per-call timeout and headers, not just
+  construction-time defaults.
 - **RFC 8785 JCS canonicalization** for cross-implementation signature
-  verification.
+  verification, so a card signed by another A2A implementation can be
+  verified (today, only signatures over this library's own serialization
+  verify).
 - **Listener/server-side support**, once client-side coverage is stable —
   letting a Ballerina service host an A2A agent, not just call one.
 
@@ -150,6 +181,7 @@ public function main() returns error? {
 
 This proposal introduces the first Ballerina client for the A2A protocol,
 covering all client-side spec operations across three transport bindings with
-a single, idiomatic API. It intentionally scopes out server-side support and
-several ergonomics improvements, tracked above as follow-up work once this
-client foundation lands.
+a single, idiomatic, card-first API. It intentionally scopes out server-side
+support and a small set of larger design questions (interceptors, per-call
+context, cross-implementation signature verification), tracked above as
+follow-up work once this client foundation lands.
