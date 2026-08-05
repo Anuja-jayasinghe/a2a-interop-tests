@@ -1,4 +1,4 @@
-# A2A Client APIs for Ballerina
+# A2A Support for Ballerina — Client
 
 - Author: Anuja Jayasinghe
 - Reviewers: TBD
@@ -9,10 +9,13 @@
 
 ## Summary
 
-`ballerina/a2a` is a client library for the [Agent2Agent (A2A) protocol](https://a2a-protocol.org),
-an open protocol that lets independent AI agents discover each other's
-capabilities and exchange tasks and messages over a common wire format. This
-proposal introduces a Ballerina client SDK that lets any Ballerina service or
+This proposal introduces full A2A protocol support for Ballerina, delivered in
+two phases: a **client**, proposed here, and a **listener** (server side), to
+follow in a separate proposal once the client foundation lands. `ballerina/a2a`
+is a complete client implementation of the
+[Agent2Agent (A2A) protocol](https://a2a-protocol.org), an open protocol that
+lets independent AI agents discover each other's capabilities and exchange
+tasks and messages over a common wire format. It lets any Ballerina service or
 program act as an A2A client — discovering an agent, negotiating protocol
 version and transport, and driving the full client-side operation set defined
 by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
@@ -29,11 +32,15 @@ by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
   configuration, and extended card retrieval.
 - Resilient streaming: Server-Sent Events with automatic reconnection on a
   dropped (non-terminal) stream.
+- Lay the groundwork for a Ballerina service to also *host* an A2A agent —
+  the client's types and error taxonomy are designed to be reused, not
+  redesigned, by the listener proposal that follows this one.
 
 ## Non-Goals
 
-- Hosting an A2A agent (the server/listener side). This proposal is
-  client-only; a listener is a separate future proposal.
+- Hosting an A2A agent (the server/listener side) is out of scope **for this
+  proposal**, not for the project as a whole — it's the planned subject of
+  the listener proposal that follows this one (see Summary).
 - A transport/interceptor plugin system, per-call request context (timeout,
   headers), and RFC 8785 JCS canonicalization for cross-implementation
   signature verification — real gaps versus the Python reference client, but
@@ -181,7 +188,9 @@ public function main() returns error? {
 
 ## Conclusion
 
-This proposal introduces the first Ballerina client for the A2A protocol,
-covering all client-side spec operations across three transport bindings with
-a single, idiomatic API that constructs from either a URL or an
-already-resolved card.
+This proposal introduces the client half of A2A protocol support for
+Ballerina, covering all client-side spec operations across three transport
+bindings with a single, idiomatic API that constructs from either a URL or an
+already-resolved card. It establishes the types, transports, and error model
+a subsequent listener proposal will build on to complete A2A support for
+Ballerina.
