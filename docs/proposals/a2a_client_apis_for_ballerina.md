@@ -82,25 +82,35 @@ authentication.
 
 ### Client construction
 
-The card is the primary input; the client is built directly from it rather
-than requiring the caller to separately derive and pass its URL:
+Which of the two a caller has in hand — a URL or an already-resolved card —
+varies by situation, so construction accepts either as a union, not just the
+card:
 
 ```ballerina
-a2a:AgentCard card = check a2a:resolveAgentCard(url);
-a2a:Client agentClient = check a2a:newClientFromCard(card);
-
-// or, when only the URL is known up front:
-a2a:Client agentClient = check a2a:newClientFromUrl(url);
+public isolated function newClient(AgentCard|string agent, ...) returns Client|error;
 ```
 
-`newClientFromCard`/`newClientFromUrl` derive the service URL from the card
-internally, via the interface `selectInterface(card, binding)` picks. Selection
-prefers `protocolVersion 1.0`, then newer, then `0.3`+, then unversioned — not
-just the first entry that matches the requested binding, so the ordering of a
-card's `supportedInterfaces` can't silently downgrade the protocol version
-used. If the selected interface declares a `tenant`, it's read automatically
-instead of requiring the caller to copy it by hand; an explicitly-passed
-`tenant` still wins.
+```ballerina
+// caller already resolved the card (e.g. for display, or reused across clients)
+a2a:AgentCard card = check a2a:resolveAgentCard(url);
+a2a:Client agentClient = check a2a:newClient(card);
+
+// caller only has the URL — newClient resolves the card itself
+a2a:Client agentClient = check a2a:newClient(url);
+```
+
+Either way, only one of URL or card is ever passed once — never both. When a
+card is passed, its service URL is derived internally rather than re-supplied
+by the caller; when a URL is passed, `newClient` resolves the card once and
+proceeds identically from there.
+
+The URL is derived via the interface `selectInterface(card, binding)` picks.
+Selection prefers `protocolVersion 1.0`, then newer, then `0.3`+, then
+unversioned — not just the first entry that matches the requested binding, so
+the ordering of a card's `supportedInterfaces` can't silently downgrade the
+protocol version used. If the selected interface declares a `tenant`, it's
+read automatically instead of requiring the caller to copy it by hand; an
+explicitly-passed `tenant` still wins.
 
 The existing positional constructor, `new (serviceUrl, ..., agentCard = card)`,
 remains available as an escape hatch for the cases where the client
@@ -149,8 +159,7 @@ import ballerina/io;
 public function main() returns error? {
     string url = "https://weather-agent.example.com";
 
-    a2a:AgentCard card = check a2a:resolveAgentCard(url);
-    a2a:Client agentClient = check a2a:newClientFromCard(card);
+    a2a:Client agentClient = check a2a:newClient(url);
 
     a2a:Message request = {
         role: "user",
@@ -181,7 +190,8 @@ public function main() returns error? {
 
 This proposal introduces the first Ballerina client for the A2A protocol,
 covering all client-side spec operations across three transport bindings with
-a single, idiomatic, card-first API. It intentionally scopes out server-side
+a single, idiomatic API that constructs from either a URL or an
+already-resolved card. It intentionally scopes out server-side
 support and a small set of larger design questions (interceptors, per-call
 context, cross-implementation signature verification), tracked above as
 follow-up work once this client foundation lands.
