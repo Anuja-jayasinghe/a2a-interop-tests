@@ -43,12 +43,13 @@ public function main() returns error? {
     io:println("  extendedAgentCard: ", card.capabilities.extendedAgentCard);
     io:println();
 
-    // Passing the resolved card lets the Client auto-detect whether this
-    // agent speaks A2A v1.0 or the older v0.3 dialect (see
-    // ballerina/a2a's compat_v03.bal) and translate transparently --
-    // everything below this line is identical regardless of which server
-    // is configured.
-    a2a:Client agentClient = check new (url, clientConfig = DEMO_CLIENT_CONFIG, agentCard = card);
+    // newClient derives the service URL from the card itself (via
+    // primaryUrl/selectInterface) instead of taking url a second time, and
+    // lets the Client auto-detect whether this agent speaks A2A v1.0 or the
+    // older v0.3 dialect (see ballerina/a2a's compat_v03.bal) and translate
+    // transparently -- everything below this line is identical regardless
+    // of which server is configured.
+    a2a:Client agentClient = check a2a:newClient(card, clientConfig = DEMO_CLIENT_CONFIG);
 
     io:println("=== Step 2: sendMessage ===");
     string firstText = "Say hello.";
