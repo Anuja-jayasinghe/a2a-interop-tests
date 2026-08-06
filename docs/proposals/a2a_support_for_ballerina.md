@@ -121,10 +121,42 @@ read automatically instead of requiring the caller to copy it by hand; an
 explicitly-passed `tenant` still wins.
 
 The existing positional constructor, `new (serviceUrl, ..., agentCard = card)`,
-remains available as an escape hatch for the cases where the client
-genuinely needs to point at a different URL than the one the card declares —
-proxies, tests, or a card with several interfaces where a non-preferred one is
-wanted deliberately.
+remains available — not as a deprecated escape hatch superseded by
+`newClient`, but as a fully supported, independently public low-level path
+in its own right, for cases where the client genuinely needs to point at a
+different URL than the one the card declares (proxies, tests, or a card with
+several interfaces where a non-preferred one is wanted deliberately), or
+where the caller has already resolved every argument itself and has no need
+for `newClient`'s derivation logic at all. `newClient` is implemented in
+terms of this constructor, not a replacement for it.
+
+This two-entry-point shape was checked against the A2A spec and both
+reference SDKs before settling on it, specifically to answer whether a
+factory calling into an existing raw constructor is genuine layering or just
+a patch on top of a gap-ridden API:
+
+- **The A2A spec** (`specification.md` §8.2/§8.3) is silent on constructor/
+  factory API design — that's implementation-defined — but its §8.3.2 client
+  protocol-selection algorithm (parse `supportedInterfaces`, select a
+  supported transport, prefer earlier entries, use that entry's URL) is
+  exactly what `primaryUrl`/`selectInterface` already implement, confirming
+  card→URL derivation as correct default behavior.
+- **Python's `a2a-sdk`** keeps `BaseClient.__init__` — the raw,
+  fully-resolved constructor — fully public alongside `ClientFactory.create`/
+  `create_from_url` and the `create_client(agent: str | AgentCard, ...)`
+  convenience function `newClient` mirrors almost exactly. Its own docstring
+  frames the low-level path as intentional, not discouraged: *"For reusing a
+  factory across multiple agents or registering custom transports, use
+  `ClientFactory` directly instead."*
+- **Java's SDK** makes the raw `Client` constructor package-private, but only
+  because it's reached through `ClientBuilder` — itself a complete,
+  independently public entry point (`Client.builder(card).withTransport(...)
+  .build()`). Java's builder always requires an already-resolved `AgentCard`
+  and has no bare-URL convenience or URL-override concept at all; resolving a
+  card from a URL is a wholly separate public step (`A2A.getAgentCard(url)`).
+
+Neither reference SDK collapses to a single sole public constructor, so
+`ballerina/a2a` doesn't either — `new (...)` stays public.
 
 ## Design 
 
