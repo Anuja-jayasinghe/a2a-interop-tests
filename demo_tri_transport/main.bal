@@ -40,8 +40,7 @@ public function main() returns error? {
 }
 
 function askOverTransport(string url, a2a:TransportBinding binding, string label, string question) returns error? {
-    a2a:AgentCard card = check a2a:resolveAgentCard(url, DEMO_CLIENT_CONFIG);
-    a2a:Client agentClient = check new (url, clientConfig = DEMO_CLIENT_CONFIG, agentCard = card, binding = binding);
+    a2a:Client agentClient = check a2a:newClient(url, clientConfig = DEMO_CLIENT_CONFIG, binding = binding);
 
     a2a:Message msg = {
         messageId: uuid:createType4AsString(),

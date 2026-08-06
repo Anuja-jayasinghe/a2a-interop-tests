@@ -44,8 +44,7 @@ function testDiceAgentSendMessageJsonRpc() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_DICE_AGENT_URL");
-    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl, DICE_AGENT_CLIENT_CONFIG);
-    a2a:Client c = check new (baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, agentCard = card, binding = "JSONRPC");
+    a2a:Client c = check a2a:newClient(baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, binding = "JSONRPC");
 
     a2a:Message msg = {
         messageId: "dice-interop-jsonrpc-1",
@@ -75,8 +74,7 @@ function testDiceAgentSendMessageRest() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_DICE_AGENT_URL");
-    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl, DICE_AGENT_CLIENT_CONFIG);
-    a2a:Client c = check new (baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, agentCard = card, binding = "HTTP+JSON");
+    a2a:Client c = check a2a:newClient(baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, binding = "HTTP+JSON");
 
     a2a:Message msg = {
         messageId: "dice-interop-rest-1",
@@ -106,12 +104,13 @@ function testDiceAgentSendMessageStreamGrpc() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_DICE_AGENT_URL");
-    a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl, DICE_AGENT_CLIENT_CONFIG);
     // Note: DICE_AGENT_CLIENT_CONFIG's httpVersion only affects this
     // Client's internal (unused, in GRPC mode) plain http:Client -- the
     // actual gRPC stub always speaks HTTP/2 regardless, since
     // projectToGrpcClientConfig only ever projects .auth, never httpVersion.
-    a2a:Client c = check new (baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, agentCard = card, binding = "GRPC");
+    // It's also what newClient uses for the card-fetch itself, so the same
+    // HTTP/1.1 pin from findings.md #7 still applies to discovery here.
+    a2a:Client c = check a2a:newClient(baseUrl, clientConfig = DICE_AGENT_CLIENT_CONFIG, binding = "GRPC");
 
     a2a:Message msg = {
         messageId: "dice-interop-grpc-1",
