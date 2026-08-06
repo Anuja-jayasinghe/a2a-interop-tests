@@ -96,7 +96,7 @@ flowchart TD
 ```
 
 Every outbound request — unary or streaming, any binding — carries the
-**mandatory `A2A-Version` header** (`client.bal:493-507`, `buildHeaders`).
+**mandatory `A2A-Version` header** (`client.bal:631-645`, `buildHeaders`).
 An agent seeing this header missing/empty is required by spec to
 assume v0.3, silently downgrading the interaction — so the client
 never omits it.
@@ -108,9 +108,9 @@ Ballerina-side API:
 
 | Binding | Wire shape | Where |
 |---|---|---|
-| `JSONRPC` (default) | JSON-RPC 2.0 envelope, single POST endpoint | `client.bal:558-589` (`rpcCall`) |
-| `HTTP+JSON` (REST) | Per-operation REST routes (`POST /message:send`, `GET /tasks/{id}`, ...) | `client.bal:602-630` (`restCall`) |
-| `GRPC` | Protobuf over gRPC, generated stub | `client.bal:641-650` (`grpcCall`) |
+| `JSONRPC` (default) | JSON-RPC 2.0 envelope, single POST endpoint | `client.bal:696-727` (`rpcCall`) |
+| `HTTP+JSON` (REST) | Per-operation REST routes (`POST /message:send`, `GET /tasks/{id}`, ...) | `client.bal:740-768` (`restCall`) |
+| `GRPC` | Protobuf over gRPC, generated stub | `client.bal:779-788` (`grpcCall`) |
 
 ---
 
@@ -309,4 +309,4 @@ Ballerina today, only the client half of it.
 | Error taxonomy | `errors.bal` | `A2AError` 20, `toA2AError` 77, `toA2AErrorFromRest` 126, `toA2AErrorFromGrpc` 269 |
 | Protocol record types | `types.bal` | `Message` 219, `AgentCard` 313, `TaskState` 365, `Task` 407, `StreamResponse` 457 |
 | v0.3 wire translation | `compat_v03.bal` | whole file, 693 lines |
-| Demo entry point | `demo/main.bal` | `main` 33, `streamOneMessage` 134-178 |
+| Demo entry point | `demo/main.bal` | `main` 33, `streamOneMessage` 135-179 |
