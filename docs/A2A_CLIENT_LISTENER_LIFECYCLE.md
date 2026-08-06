@@ -211,8 +211,8 @@ flowchart TD
 Per spec §3.1.6, a resubscription's first delivered event is always
 the task's *current* state — so a reconnect may re-deliver a status
 the client already saw, but never loses one. This is opt-in
-(`Client.init(..., maxReconnectAttempts: N)`, default `0` = old
-behavior, error surfaces immediately). Implementation:
+(`maxReconnectAttempts: N`, accepted by both `Client.init` and `newClient`;
+default `0` = old behavior, error surfaces immediately). Implementation:
 `ReconnectingStreamGenerator`, `sse.bal:134-218`.
 
 ---
@@ -270,7 +270,12 @@ role** — never a listener, never an orchestrator with an upstream
 caller of its own. It is the left-hand side of §1's diagram, run by a
 human typing at a prompt instead of by another agent:
 
-1. `resolveAgentCard` — discovery (§1 step 1-2)
+1. `resolveAgentCard` — discovery (§1 step 1-2), then `newClient(card, ...)`
+   to construct — the card fetched for the printout is reused for
+   construction instead of passing the URL to the client a second time (see
+   §9's `newClient` entry; `demo/main.bal` used to do
+   `resolveAgentCard(url)` followed by `new (url, ..., agentCard = card)`,
+   duplicating the URL — `newClient` derives it from the card instead)
 2. `sendMessage` — one unary send/response, no streaming
 3. `sendStreamingMessage` — the full open→push→close cycle from §1 and §4
 4. An interactive loop that continues a task via `taskId`/`contextId`
@@ -290,13 +295,15 @@ Ballerina today, only the client half of it.
 | Concern | File | Lines |
 |---|---|---|
 | Discovery | `client.bal` | `fetchAgentCardWithCaching` 87-116, `resolveAgentCard` 127 |
-| Client construction / mode detection | `client.bal` | `init` 427-483 |
-| Mandatory headers | `client.bal` | `buildHeaders` 493-507 |
-| JSON-RPC unary dispatch | `client.bal` | `rpcCall` 558-589 |
-| REST unary dispatch | `client.bal` | `restCall` 602-630 |
-| gRPC unary dispatch | `client.bal` | `grpcCall` 641-650 |
-| `sendMessage` | `client.bal` | 815-869 |
-| Opening a stream | `client.bal` | `openEventStream` 877-923 |
+| Card-first/URL-first factory (recommended entry point) | `client.bal` | `newClient` 335-357 |
+| Client construction / mode detection (low-level constructor) | `client.bal` | `init` 565-621 |
+| Interface selection (protocolVersion-ranked, powers both `newClient` and `init`'s mode detection) | `client.bal` | `protocolVersionRank` 190-208, `selectInterface` 242-260 |
+| Mandatory headers | `client.bal` | `buildHeaders` 631-645 |
+| JSON-RPC unary dispatch | `client.bal` | `rpcCall` 696-727 |
+| REST unary dispatch | `client.bal` | `restCall` 740-768 |
+| gRPC unary dispatch | `client.bal` | `grpcCall` 779-788 |
+| `sendMessage` | `client.bal` | 953-1007 |
+| Opening a stream | `client.bal` | `openEventStream` 1015-1061 |
 | SSE decoding + terminal-close logic | `sse.bal` | `A2AStreamGenerator` 35-123, `isTerminalEvent` 224-234 |
 | Auto-reconnect | `sse.bal` | `ReconnectingStreamGenerator` 134-218 |
 | Error taxonomy | `errors.bal` | `A2AError` 20, `toA2AError` 77, `toA2AErrorFromRest` 126, `toA2AErrorFromGrpc` 269 |

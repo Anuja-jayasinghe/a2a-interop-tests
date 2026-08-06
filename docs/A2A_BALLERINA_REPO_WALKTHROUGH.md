@@ -19,7 +19,7 @@ A Ballerina client library (org `ballerina`, package `a2a`) for the Agent2Agent 
 ```
 a2a/
 ├── types.bal              data model (records/enums, spec §3-4)
-├── client.bal              the Client class + resolveAgentCard (the whole public API surface)
+├── client.bal              the Client class + newClient/resolveAgentCard (the whole public API surface)
 ├── errors.bal              A2AError hierarchy + per-transport error mapping
 ├── sse.bal                 SSE stream decoding + auto-reconnect
 ├── compat_v03.bal          legacy v0.3 wire-dialect translation
@@ -33,7 +33,7 @@ a2a/
 │   └── grpcstub/                generated gRPC stub (its own submodule — see why below)
 ├── proto/                  vendored, hand-trimmed a2a.proto + provenance record
 ├── scripts/regen-grpc-stub.sh   regenerates modules/grpcstub/ from proto/, with guardrails
-├── tests/                  354 mock-based unit tests (this package's own CI gate)
+├── tests/                  359 mock-based unit tests (this package's own CI gate)
 └── docs/
     ├── A2A_Technical_Design.md      the living design doc (data model, methods, error mapping, known gaps)
     ├── archive/                     superseded drafts, kept for history
@@ -50,13 +50,15 @@ Every spec-defined shape as a Ballerina `record {| ... |}` or `enum`: `Message`,
 - **`Part` has no `kind` discriminator field.** v1.0 dropped it — which variant (`text`/`raw`/`url`/`data`) is determined by which field is actually present, not a tag. `parseSecuritySchemes`/`parseSecurityRequirements`/`parseAgentCardSignatures` all follow the same "drop the one malformed entry, don't fail the whole card" philosophy for the same forward-compatibility reason.
 - **`encodeRawBytesForWire`/`decodeRawBytesFromWire`** are the most surprising code in this file: Ballerina's default `byte[]` JSON serialization produces an integer array (`[72, 101, ...]`), but every real A2A server expects base64 (the protobuf-JSON convention for bytes fields). These two functions walk a `Message`/`Task`/etc. tree *after* `toJson()` and *before* `cloneWithType()` respectively, converting just `Part.raw` — and only `Part.raw`, via a hand-maintained allow-list of exactly which container keys (`history`, `artifacts`, `parts`, etc.) can actually hold a `Part` — so a `metadata` field that happens to contain an unrelated key literally named `"raw"` is never touched. Structure-aware, not key-name-driven, on purpose.
 
-## The client — `client.bal` (1412 lines, the whole public surface)
+## The client — `client.bal` (1520 lines, the whole public surface)
 
-One `isolated class Client` with all 11 spec operations as `isolated remote function`s (`sendMessage`, `sendStreamingMessage`, `getTask`, `cancelTask`, `subscribeToTask`, `listTasks`, the four push-notification-config CRUD methods, `getExtendedAgentCard`), plus module-level `resolveAgentCard`/`resolveAgentCardCached`/`primaryUrl`/`selectInterface`.
+One `isolated class Client` with all 11 spec operations as `isolated remote function`s (`sendMessage`, `sendStreamingMessage`, `getTask`, `cancelTask`, `subscribeToTask`, `listTasks`, the four push-notification-config CRUD methods, `getExtendedAgentCard`), plus module-level `newClient`/`resolveAgentCard`/`resolveAgentCardCached`/`primaryUrl`/`selectInterface`.
 
-- **One `binding` parameter picks the transport** (`"JSONRPC"` default, `"HTTP+JSON"`, `"GRPC"`) at `Client.init` time. Every remote function funnels through one internal dispatcher (`rpcCall`) that branches on `self.binding` and calls the matching encode/decode path — `buildRestRequest` maps each of the 11 operations onto its REST method/path/query/body shape; the gRPC path defers to `grpc_binding.bal`'s `encodeGrpcRequest`/`decodeGrpcResponse`. A caller's own code never branches on transport.
+- **Two public ways to construct a `Client`, both first-class.** `new (serviceUrl, ..., agentCard?)` is the low-level constructor — a concrete URL is mandatory, `agentCard` is an independent optional hint never used to derive the URL. `newClient(AgentCard|string agent, ...)` is the recommended factory for the common case: pass a URL (it resolves the card itself via `resolveAgentCard`) or an already-resolved `AgentCard` (it derives the URL via `primaryUrl`/`selectInterface`) — never both — and it auto-wires `tenant` from the selected `AgentInterface` when the caller doesn't pass one explicitly. `newClient` is implemented in terms of `new (...)`, not a replacement for it; both constructors' doc comments say so explicitly, citing the same precedent below.
+- **This mirrors the reference SDKs, verified directly against them, not assumed.** Python's `a2a-sdk` keeps `BaseClient.__init__` fully public alongside its `create_client`/`ClientFactory` convenience layer (its own docstring: *"for reusing a factory... use `ClientFactory` directly instead"* — the low-level path is framed as intentional, not deprecated). Java's SDK keeps its raw `Client` constructor package-private, but only because it's reached through `ClientBuilder`, itself a complete, independently public entry point. Neither reference implementation collapses to one sole public constructor, which is why `new (...)` stays public here too rather than being hidden behind `newClient`.
+- **One `binding` parameter picks the transport** (`"JSONRPC"` default, `"HTTP+JSON"`, `"GRPC"`) at construction time. Every remote function funnels through one internal dispatcher (`rpcCall`) that branches on `self.binding` and calls the matching encode/decode path — `buildRestRequest` maps each of the 11 operations onto its REST method/path/query/body shape; the gRPC path defers to `grpc_binding.bal`'s `encodeGrpcRequest`/`decodeGrpcResponse`. A caller's own code never branches on transport.
 - **`resolveAgentCard` always fetches fresh**; `resolveAgentCardCached` is the newer, opt-in ETag/`304`-aware sibling — kept deliberately separate rather than replacing the original, so existing callers who always want the latest card see no behavior change.
-- **`primaryUrl`/`selectInterface`** exist because v1.0 moved an agent's primary URL from a single top-level `AgentCard.url` field to `supportedInterfaces[0].url`, but plenty of real servers still send the legacy field, some send neither in the expected shape, and a card can list several interfaces. `primaryUrl` applies the correct precedence once, so nothing else in the codebase has to re-derive it.
+- **`primaryUrl`/`selectInterface`** exist because v1.0 moved an agent's primary URL from a single top-level `AgentCard.url` field to `supportedInterfaces[0].url`, but plenty of real servers still send the legacy field, some send neither in the expected shape, and a card can list several interfaces. `primaryUrl` applies the correct precedence once, so nothing else in the codebase has to re-derive it. `selectInterface` now ranks candidate interfaces by `protocolVersion` (exactly `1.0` highest, then newer, then `0.x`, then unversioned lowest) rather than taking the first `supportedInterfaces` entry matching the requested binding — a card that happens to list an older interface before a newer one no longer silently picks the older protocol. Per spec §8.3.2 vs. the Python reference's `_find_best_interface`: the spec's plain-text "prefer earlier entries" describes choosing *which transport* among several a client supports; version-preference among several entries *of the same transport* is a finer-grained rule the spec text doesn't spell out, filled in here to match Python's actual behavior.
 - **`normalizeGrpcSchemeUrl`** rewrites a `grpc://`/`grpcs://` URL to `http://`/`https://` before constructing the underlying `http:Client`/`grpc:Client` — cosmetic-looking, but without it a caller who copies a `grpc://` URL straight from an `AgentInterface` gets a confusing low-level connection error instead of just working.
 
 ## Error handling — `errors.bal` (285 lines)
@@ -99,7 +101,7 @@ Both `modules/transport/` (JSON-RPC envelope types) and `modules/grpcstub/` (gen
 - **`CLAUDE.md`** — the internal AI-agent guardrail file (this repo's counterpart to `a2a-interop-tests`' own): states Phase 1's client-only scope explicitly ("Server-side (Listener) is Phase 2 — do not implement it yet") and points to the design doc as the actual source of truth.
 - **`main.bal`** is the unmodified 5-line `bal new` scaffold stub (`io:println("Hello, World!")`) — dead weight, never used since this package is a library, not an executable. Harmless but worth knowing it's not meaningful code.
 
-## Tests — `tests/` (354 passing, 0 failing)
+## Tests — `tests/` (359 passing, 0 failing)
 
 One file per production concern (`client_test.bal`, `errors_test.bal`, `sse_test.bal`, `types_test.bal`, `auth_test.bal`, `signature_test.bal`, `compat_v03_test.bal`, four `grpc_*_test.bal` files, `equivalence_test.bal`), all mock-based and deterministic — `testutil.bal` and `grpcmock_service.bal`/`grpcmock_scripting.bal` provide the scripted mock A2A servers every test drives. `equivalence_test.bal` specifically asserts that JSON-RPC and gRPC produce equivalent results for the same logical call — a direct cross-transport consistency check, not just "does each transport work in isolation." This suite is this repo's own CI gate; real-server proof (that the mocks aren't just validating the library's own misreadings of the spec) lives entirely in the companion `a2a-interop-tests` repo, deliberately kept separate.
 
@@ -111,13 +113,13 @@ One file per production concern (`client_test.bal`, `errors_test.bal`, `sse_test
 
 ---
 
-**Bottom line**: this is a client-only library, deliberately and explicitly (checked in three separate places — `CLAUDE.md`, the design doc's §1.2, and `README.md`'s Roadmap section), with all 11 spec operations working over all three transport bindings and both wire dialects, backed by 354 passing unit tests plus real-server proof in the companion repo. The two genuinely open items (mTLS auto-wiring, JWS's JCS canonicalization) are both documented, deliberate scope boundaries with a stated reason, not unfinished work someone forgot about.
+**Bottom line**: this is a client-only library, deliberately and explicitly (checked in three separate places — `CLAUDE.md`, the design doc's §1.2, and `README.md`'s Roadmap section), with all 11 spec operations working over all three transport bindings and both wire dialects, backed by 359 passing unit tests plus real-server proof in the companion repo. The two genuinely open items (mTLS auto-wiring, JWS's JCS canonicalization) are both documented, deliberate scope boundaries with a stated reason, not unfinished work someone forgot about.
 
 ---
 
 ## Appendix: which real agents prove which features (from `a2a-interop-tests`)
 
-This library's own 354 tests are mock-based, by design — they gate every
+This library's own 359 tests are mock-based, by design — they gate every
 change fast and deterministically, but only prove the code does what *this
 library* thinks the spec says. Real proof that it works against
 independently-built servers lives entirely in the companion

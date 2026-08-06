@@ -3,9 +3,17 @@
 - Author: Anuja Jayasinghe
 - Reviewers: TBD
 - Created: 2026-08-05
-- Updated: 2026-08-05
+- Updated: 2026-08-06
 - Issue: TBD
-- Status: Draft
+- Status: Implemented — `newClient` landed in `a2a-ballerina/a2a/client.bal`
+  as proposed below, plus the `selectInterface` protocolVersion-ranking fix
+  this doc's construction section describes. `new (serviceUrl, ...)` was kept
+  fully public rather than deprecated, per a check against the A2A spec
+  (silent on constructor API design) and both reference SDKs — Python's
+  `a2a-sdk` keeps `BaseClient.__init__` public alongside `create_client`;
+  Java's `ClientBuilder` is a complete public entry point in its own right.
+  Neither collapses to one sole public constructor, so this SDK doesn't
+  either.
 
 ## Summary
 
@@ -27,7 +35,7 @@ by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
   compatibility mode).
 - Agent discovery via Agent Cards — fetching, caching, and verifying them —
   used to drive protocol/auth negotiation.
-- Full coverage of the client-side operations defined by A2A §9.4: message
+- Full coverage of the client-side operations defined by A2A 9.4: message
   send/stream, task lifecycle (get/cancel/list/subscribe), push-notification
   configuration, and extended card retrieval.
 - Resilient streaming: Server-Sent Events with automatic reconnection on a
@@ -36,15 +44,6 @@ by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
   the client's types and error taxonomy are designed to be reused, not
   redesigned, by the listener proposal that follows this one.
 
-## Non-Goals
-
-- Hosting an A2A agent (the server/listener side) is out of scope **for this
-  proposal**, not for the project as a whole — it's the planned subject of
-  the listener proposal that follows this one (see Summary).
-- A transport/interceptor plugin system, per-call request context (timeout,
-  headers), and RFC 8785 JCS canonicalization for cross-implementation
-  signature verification — real gaps versus the Python reference client, but
-  larger design questions left for separate follow-up proposals.
 
 ## Motivation
 
@@ -127,7 +126,7 @@ genuinely needs to point at a different URL than the one the card declares —
 proxies, tests, or a card with several interfaces where a non-preferred one is
 wanted deliberately.
 
-## Design Strategy
+## Design 
 
 - **One params shape, three bindings.** Every operation builds a
   `map<json>` params value; JSON-RPC sends it as-is, REST translates it
