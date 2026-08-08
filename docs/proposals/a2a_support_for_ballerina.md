@@ -129,9 +129,9 @@ authentication.
 
 ### Client construction
 
-Which of the two a caller has in hand — a URL or an already-resolved card —
-varies by situation, so construction accepts either as a union, not just the
-card:
+A caller may have either a URL or an already-resolved card in hand,
+depending on the situation, so construction accepts either as a union,
+not just the card:
 
 ```ballerina
 public isolated function newClient(AgentCard|string agent, ...) returns Client|error;
