@@ -108,6 +108,15 @@ a2a:AgentCard card = check a2a:resolveAgentCard(url);
 boolean|error valid = a2a:verifyAgentCardSignature(card, publicKey);
 ```
 
+The spec mandates the *procedure* here, not a named API: §8.4.3 states
+clients verifying Agent Card signatures **MUST** follow its six-step
+canonicalize-and-verify sequence, and **SHOULD** verify at least one
+signature before trusting a card — but it stops there, and neither
+reference SDK (Python `a2a-sdk`, Java) ships an equivalent helper;
+callers are left to hand-roll it. `verifyAgentCardSignature` is
+`ballerina/a2a` implementing that MUST-behavior as a convenience function
+the reference SDKs don't provide, not a spec-defined method being wrapped.
+
 `verifyAgentCardSignature` checks the card's embedded JWS signature
 (RS256/ES256) against the given key, returning `false` — not an error — for
 a mismatched or tampered signature; only a malformed JWS or an unsupported
