@@ -240,6 +240,463 @@ Neither reference SDK collapses to a single sole public constructor, so
   the same set of `A2AError` subtypes, so calling code doesn't need to know
   which binding it's talking over to handle failures.
 
+### Public Types
+
+Every spec-facing type is an **open** record (`json...;` rest field), so a
+newer protocol revision adding fields doesn't break parsing of existing
+ones.
+
+**Messaging and task types:**
+
+```ballerina
+public enum Role {
+    ROLE_UNSPECIFIED,
+    ROLE_USER,
+    ROLE_AGENT
+}
+
+// Exactly one of text/raw/url/data is set (variant by field presence, no
+// discriminator — v1.0 dropped the old `kind` tag).
+public type Part record {|
+    string? text?;
+    byte[]? raw?;             // inline file bytes; base64 on the wire
+    string? url?;             // file by reference
+    json? data?;               // arbitrary structured data
+    string? filename?;         // applies to file variants (raw/url)
+    string? mediaType?;        // MIME type; applies to all variants
+    map<json>? metadata?;
+    json...;
+|};
+
+public type Message record {|
+    string messageId;          // required; caller generates a UUID
+    Role role;                 // ROLE_USER for outbound messages
+    Part[] parts;
+    string? contextId?;        // groups related tasks and messages
+    string? taskId?;           // set when continuing an existing task
+    string[] referenceTaskIds = [];
+    string[] extensions = [];
+    map<json>? metadata?;
+    json...;
+|};
+
+public enum TaskState {
+    TASK_STATE_UNSPECIFIED,
+    TASK_STATE_SUBMITTED,
+    TASK_STATE_WORKING,
+    TASK_STATE_COMPLETED,       // terminal
+    TASK_STATE_FAILED,          // terminal
+    TASK_STATE_CANCELED,        // terminal
+    TASK_STATE_REJECTED,        // terminal
+    TASK_STATE_INPUT_REQUIRED,  // interrupted — resumable via follow-up message
+    TASK_STATE_AUTH_REQUIRED    // interrupted — resumable via follow-up message
+}
+
+public type TaskStatus record {|
+    TaskState state;
+    Message? message?;         // rich, not a plain string
+    string? timestamp?;        // ISO 8601
+    json...;
+|};
+
+public type Artifact record {|
+    string artifactId;         // unique within the task; the identifier
+    string? name?;
+    string? description?;
+    Part[] parts;               // must contain at least one part
+    map<json>? metadata?;
+    string[] extensions = [];
+    json...;
+|};
+
+public type Task record {|
+    string id;                  // server-generated; clients never create this
+    string? contextId?;
+    TaskStatus status;
+    Message[] history = [];
+    Artifact[] artifacts = [];
+    map<json>? metadata?;
+    json...;
+|};
+
+// Delivered over a stream on a lifecycle transition.
+public type TaskStatusUpdateEvent record {|
+    string taskId;
+    string contextId;
+    TaskStatus status;
+    map<json>? metadata?;
+    json...;
+|};
+
+// Delivered over a stream; supports chunked delivery via append/lastChunk.
+public type TaskArtifactUpdateEvent record {|
+    string taskId;
+    string contextId;
+    Artifact artifact;
+    boolean append = false;
+    boolean lastChunk = false;
+    map<json>? metadata?;
+    json...;
+|};
+
+// Wrapper delivered by streaming operations; exactly one field is
+// non-nil per event (spec §3.2.3).
+public type StreamResponse record {|
+    Task? task?;
+    Message? message?;
+    TaskStatusUpdateEvent? statusUpdate?;
+    TaskArtifactUpdateEvent? artifactUpdate?;
+    json...;
+|};
+
+// Wrapper returned by a unary sendMessage call — a narrower sibling of
+// StreamResponse, since a non-streaming reply can only ever be a Task or
+// a Message (spec §3.1.1).
+public type SendMessageResult record {|
+    Task? task?;
+    Message? message?;
+    json...;
+|};
+```
+
+**Agent Card types:**
+
+```ballerina
+public type AgentProvider record {|
+    string organization;
+    string url;
+    string? contactEmail?;
+    json...;
+|};
+
+public type AgentExtension record {|
+    string uri;
+    string? description?;
+    boolean required = false;
+    map<json>? params?;
+    json...;
+|};
+
+public type AgentCapabilities record {|
+    boolean streaming = false;
+    boolean pushNotifications = false;
+    boolean extendedAgentCard = false;
+    AgentExtension[] extensions = [];
+    json...;
+|};
+
+public type AgentSkill record {|
+    string id;                  // unique within the agent
+    string name;
+    string description;
+    string[] tags = [];
+    string[] inputModes = [];
+    string[] outputModes = [];
+    string[] examples = [];
+    SecurityRequirement[] securityRequirements = [];
+    json...;
+|};
+
+// One transport binding an agent is reachable on.
+public type AgentInterface record {|
+    string url;
+    string protocolBinding;     // e.g. "JSONRPC", "GRPC", "HTTP+JSON"
+    string? protocolVersion?;   // if it differs from the card's default
+    string? tenant?;            // must be echoed on every subsequent call
+    json...;
+|};
+
+// A JWS (RFC 7515) computed over an AgentCard; verify with
+// verifyAgentCardSignature.
+public type AgentCardSignature record {|
+    map<json>? header?;
+    string protected;
+    string signature;
+    json...;
+|};
+
+public type AgentCard record {|
+    string name;
+    string description;
+    string version;             // agent's own version, not the protocol version
+    string? protocolVersion?;   // legacy pre-1.0 field; see primaryUrl
+    string? url?;                // legacy primary URL; use primaryUrl(card)
+    AgentProvider? provider?;
+    string? documentationUrl?;
+    string? iconUrl?;
+    AgentCapabilities capabilities;
+    AgentInterface[] supportedInterfaces = [];
+    map<SecurityScheme> securitySchemes = {};
+    SecurityRequirement[] securityRequirements = [];
+    string[] defaultInputModes = ["text"];
+    string[] defaultOutputModes = ["text"];
+    AgentSkill[] skills;
+    AgentCardSignature[] signatures = [];
+    json...;
+|};
+```
+
+**Security types**, per OpenAPI 3.0's Security Scheme Object:
+
+```ballerina
+public type ApiKeySecurityScheme record {|
+    string? description?;
+    "query"|"header"|"cookie" 'in;   // where the API key is sent
+    string name;                     // the header/query/cookie parameter name
+    "apiKey" 'type = "apiKey";
+    json...;
+|};
+
+public type HttpAuthSecurityScheme record {|
+    string? description?;
+    string scheme;                   // IANA HTTP Authentication Scheme, e.g. "Bearer"
+    string? bearerFormat?;           // hint, e.g. "JWT"
+    "http" 'type = "http";
+    json...;
+|};
+
+public type OAuth2SecurityScheme record {|
+    string? description?;
+    OAuthFlows flows;
+    string? oauth2MetadataUrl?;      // RFC 8414 metadata URL
+    "oauth2" 'type = "oauth2";
+    json...;
+|};
+
+public type OpenIdConnectSecurityScheme record {|
+    string? description?;
+    string openIdConnectUrl;         // OIDC Discovery URL
+    "openIdConnect" 'type = "openIdConnect";
+    json...;
+|};
+
+public type MutualTlsSecurityScheme record {|
+    string? description?;
+    "mutualTLS" 'type = "mutualTLS";
+    json...;
+|};
+
+// Discriminated by the `type` field's literal value.
+public type SecurityScheme ApiKeySecurityScheme|HttpAuthSecurityScheme|OAuth2SecurityScheme
+    |OpenIdConnectSecurityScheme|MutualTlsSecurityScheme;
+
+// A set of scheme names that must all be satisfied together (an AND).
+// AgentCard/AgentSkill express a list of these — an OR across the list.
+public type SecurityRequirement map<string[]>;
+
+public type OAuthFlows record {|
+    AuthorizationCodeOAuthFlow? authorizationCode?;
+    ClientCredentialsOAuthFlow? clientCredentials?;
+    ImplicitOAuthFlow? implicit?;
+    PasswordOAuthFlow? password?;
+    json...;
+|};
+
+public type AuthorizationCodeOAuthFlow record {|
+    string authorizationUrl;
+    string? refreshUrl?;
+    map<string> scopes;              // scope name to human-readable description
+    string tokenUrl;
+    json...;
+|};
+
+public type ClientCredentialsOAuthFlow record {|
+    string? refreshUrl?;
+    map<string> scopes;
+    string tokenUrl;
+    json...;
+|};
+
+public type ImplicitOAuthFlow record {|
+    string authorizationUrl;
+    string? refreshUrl?;
+    map<string> scopes;
+    json...;
+|};
+
+public type PasswordOAuthFlow record {|
+    string? refreshUrl?;
+    map<string> scopes;
+    string tokenUrl;
+    json...;
+|};
+```
+
+**Request/response and push-notification types:**
+
+```ballerina
+public type SendMessageConfiguration record {|
+    string[] acceptedOutputModes = ["text"];
+    int? historyLength = ();         // unset = no limit; 0 = omit history entirely
+    boolean returnImmediately = false;
+    TaskPushNotificationConfig? taskPushNotificationConfig = ();
+    json...;
+|};
+
+public type ListTasksFilter record {|
+    string? contextId?;
+    TaskState? status?;
+    int? pageSize?;
+    string? pageToken?;              // opaque cursor from a previous call
+    int? historyLength?;
+    string? statusTimestampAfter?;   // ISO 8601
+    boolean? includeArtifacts?;
+    json...;
+|};
+
+public type ListTasksResult record {|
+    Task[] tasks;
+    string nextPageToken;            // empty when there are no more results
+    int pageSize;
+    int totalSize;
+    json...;
+|};
+
+// Credentials the client presents to a push-notification webhook it registers.
+public type AuthenticationInfo record {|
+    string scheme;                   // IANA HTTP auth scheme, e.g. "Bearer"
+    string? credentials?;
+    json...;
+|};
+
+// A webhook the server will POST task updates to.
+public type TaskPushNotificationConfig record {|
+    string url;
+    string? id?;
+    string? taskId?;                 // leave unset in a sendMessage request
+    string? token?;                  // opaque, echoed back on each push
+    AuthenticationInfo? authentication?;
+    string? tenant?;                 // must match the selected AgentInterface's tenant
+    json...;
+|};
+
+public type ListTaskPushNotificationConfigsResult record {|
+    TaskPushNotificationConfig[] configs;
+    string nextPageToken;
+    json...;
+|};
+```
+
+### Client
+
+```ballerina
+public isolated client class Client {
+
+    public isolated function init(
+            string serviceUrl,
+            http:ClientConfiguration clientConfig = {},
+            map<string> headers = {},
+            string? tenant = (),
+            AgentCard? agentCard = (),
+            string[] requestedExtensions = [],
+            map<string> credentials = {},
+            int maxReconnectAttempts = 0,
+            TransportBinding binding = "JSONRPC") returns error?;
+
+    isolated remote function sendMessage(
+            Message message,
+            SendMessageConfiguration? config = (),
+            string? tenant = (),
+            map<json>? metadata = ()) returns Task|Message|error;
+
+    isolated remote function sendStreamingMessage(
+            Message message,
+            SendMessageConfiguration? config = (),
+            string? tenant = (),
+            map<json>? metadata = ()) returns stream<StreamResponse, error?>|error;
+
+    isolated remote function getTask(
+            string taskId,
+            int? historyLength = (),
+            string? tenant = ()) returns Task|error;
+
+    isolated remote function cancelTask(
+            string taskId,
+            map<json>? metadata = (),
+            string? tenant = ()) returns Task|error;
+
+    isolated remote function subscribeToTask(
+            string taskId,
+            string? tenant = ()) returns stream<StreamResponse, error?>|error;
+
+    isolated remote function listTasks(
+            ListTasksFilter? filter = (),
+            string? tenant = ()) returns ListTasksResult|error;
+
+    isolated remote function createTaskPushNotificationConfig(
+            TaskPushNotificationConfig config,
+            string? tenant = ()) returns TaskPushNotificationConfig|error;
+
+    isolated remote function getTaskPushNotificationConfig(
+            string taskId,
+            string id,
+            string? tenant = ()) returns TaskPushNotificationConfig|error;
+
+    isolated remote function listTaskPushNotificationConfigs(
+            string taskId,
+            int? pageSize = (),
+            string? pageToken = (),
+            string? tenant = ()) returns ListTaskPushNotificationConfigsResult|error;
+
+    isolated remote function deleteTaskPushNotificationConfig(
+            string taskId,
+            string id,
+            string? tenant = ()) returns error?;
+
+    isolated remote function getExtendedAgentCard(string? tenant = ()) returns AgentCard|error;
+}
+```
+
+Every `tenant` parameter overrides the value read automatically from the
+selected `AgentInterface` (see Client construction, above) for that one
+call only.
+
+### Error Taxonomy
+
+```ballerina
+// Attached to every A2AError.
+public type A2AErrorDetail record {|
+    int code?;      // originating JSON-RPC code, preserved for diagnostics
+    string message?;
+    json data?;      // structured error details from the server
+    json...;
+|};
+
+// distinct so `is A2AError` reliably matches any subtype below, and each
+// subtype is in turn distinguishable from its siblings via `is`.
+public type A2AError distinct error<A2AErrorDetail>;
+
+public type TaskNotFoundError distinct A2AError;
+public type TaskNotCancelableError distinct A2AError;
+public type UnsupportedOperationError distinct A2AError;
+public type ContentTypeNotSupportedError distinct A2AError;
+public type InvalidAgentResponseError distinct A2AError;
+public type VersionNotSupportedError distinct A2AError;
+public type PushNotificationNotSupportedError distinct A2AError;
+public type ExtendedAgentCardNotConfiguredError distinct A2AError;
+public type ExtensionSupportRequiredError distinct A2AError;
+public type A2AInternalError distinct A2AError;         // catch-all / unrecognized code
+
+// Returned by newClient/buildAuthFromCard when a card's declared security
+// requirements can't be automatically resolved from the given credentials.
+public type AuthResolutionError distinct A2AError;
+
+// Returned by verifyAgentCardSignature for an out-of-range signatureIndex,
+// or an underlying crypto verification failure.
+public type SignatureVerificationError distinct A2AError;
+
+// Returned by verifyAgentCardSignature when a signature's JWS `alg` isn't
+// RS256 or ES256 — the only algorithms ballerina/crypto can verify.
+public type UnsupportedSignatureAlgorithmError distinct A2AError;
+```
+
+All three transports map their native errors onto this same hierarchy:
+JSON-RPC error codes map directly (`-32001` → `TaskNotFoundError`, etc.);
+REST disambiguates via the `reason` field of a `google.rpc.ErrorInfo` entry
+(HTTP status alone can't — seven distinct A2A errors all return 400); gRPC
+maps by status code alone, since `ballerina/grpc` exposes no status details
+to disambiguate further.
+
 ## Supported Operations
 
 | Category | Operations |
