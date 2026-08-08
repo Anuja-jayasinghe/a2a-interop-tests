@@ -167,8 +167,23 @@ errors if no entry matches the binding. If the selected interface declares a
 `tenant`, it's read automatically instead of requiring the caller to copy it
 by hand; an explicitly-passed `tenant` still wins.
 
-The existing positional constructor, `new (serviceUrl, ..., agentCard = card)`,
-remains available — not as a deprecated escape hatch superseded by
+The existing positional constructor remains available:
+
+```ballerina
+public isolated function init(
+        string serviceUrl,
+        http:ClientConfiguration clientConfig = {},
+        map<string> headers = {},
+        string? tenant = (),
+        AgentCard? agentCard = (),
+        string[] requestedExtensions = [],
+        map<string> credentials = {},
+        int maxReconnectAttempts = 0,
+        TransportBinding binding = "JSONRPC") returns error?;
+```
+
+Called as `new (serviceUrl, ..., agentCard = card)` — not as a deprecated
+escape hatch superseded by
 `newClient`, but as a fully supported, independently public low-level path
 in its own right, for cases where the client genuinely needs to point at a
 different URL than the one the card declares (proxies, tests, or a card with
