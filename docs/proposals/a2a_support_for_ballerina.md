@@ -78,6 +78,13 @@ generator.
 
 ### Agent Card resolution
 
+```ballerina
+public isolated function resolveAgentCard(
+        string agentBaseUrl,
+        http:ClientConfiguration clientConfig = {},
+        map<string> headers = {}) returns AgentCard|error;
+```
+
 `resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`;
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 `verifyAgentCardSignature` checks a card's embedded JWS signature (RS256/ES256)
