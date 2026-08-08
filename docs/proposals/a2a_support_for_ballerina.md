@@ -151,13 +151,21 @@ card is passed, its service URL is derived internally rather than re-supplied
 by the caller; when a URL is passed, `newClient` resolves the card once and
 proceeds identically from there.
 
-The URL is derived via the interface `selectInterface(card, binding)` picks.
-Selection prefers `protocolVersion 1.0`, then newer, then `0.3`+, then
-unversioned — not just the first entry that matches the requested binding, so
-the ordering of a card's `supportedInterfaces` can't silently downgrade the
-protocol version used. If the selected interface declares a `tenant`, it's
-read automatically instead of requiring the caller to copy it by hand; an
-explicitly-passed `tenant` still wins.
+The URL is derived via the matching interface:
+
+```ballerina
+public isolated function selectInterface(
+        AgentCard card,
+        TransportBinding preferredBinding = "JSONRPC") returns AgentInterface|error;
+```
+
+`selectInterface` returns the best-ranked `supportedInterfaces` entry for the
+requested binding — preferring the highest protocol version declared, not
+just the first matching entry — so the ordering of a card's
+`supportedInterfaces` can't silently downgrade the protocol version used; it
+errors if no entry matches the binding. If the selected interface declares a
+`tenant`, it's read automatically instead of requiring the caller to copy it
+by hand; an explicitly-passed `tenant` still wins.
 
 The existing positional constructor, `new (serviceUrl, ..., agentCard = card)`,
 remains available — not as a deprecated escape hatch superseded by
