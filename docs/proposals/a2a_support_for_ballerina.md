@@ -91,8 +91,27 @@ design — `headers` above exists for signature/proxy use, not credentials.
 Authentication only applies to the separate, authenticated extended card
 (§3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
-`verifyAgentCardSignature` checks a card's embedded JWS signature (RS256/ES256)
-before it's trusted. Parsing also normalises legacy (pre-1.0) card shapes —
+
+Signature verification is a separate, explicit step — `resolveAgentCard`
+does not call it automatically, since not every card is signed and the
+caller must supply the verifying key out-of-band:
+
+```ballerina
+public isolated function verifyAgentCardSignature(
+        AgentCard card,
+        crypto:PublicKey publicKey,
+        int signatureIndex = 0) returns boolean|SignatureVerificationError|UnsupportedSignatureAlgorithmError;
+```
+
+```ballerina
+a2a:AgentCard card = check a2a:resolveAgentCard(url);
+boolean|error valid = a2a:verifyAgentCardSignature(card, publicKey);
+```
+
+`verifyAgentCardSignature` checks the card's embedded JWS signature
+(RS256/ES256) against the given key, returning `false` — not an error — for
+a mismatched or tampered signature; only a malformed JWS or an unsupported
+algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes —
 synthesising `supportedInterfaces` from the older `url` /
 `preferredTransport` / `additionalInterfaces` fields — so an agent that only
 declares a transport that way is still reachable. The resolved card drives
