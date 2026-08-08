@@ -85,7 +85,11 @@ public isolated function resolveAgentCard(
         map<string> headers = {}) returns AgentCard|error;
 ```
 
-`resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`;
+`resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`.
+Per spec §14.3, this well-known endpoint is public and unauthenticated by
+design — `headers` above exists for signature/proxy use, not credentials.
+Authentication only applies to the separate, authenticated extended card
+(§3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 `verifyAgentCardSignature` checks a card's embedded JWS signature (RS256/ES256)
 before it's trusted. Parsing also normalises legacy (pre-1.0) card shapes —
