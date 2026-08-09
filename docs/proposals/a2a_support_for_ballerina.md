@@ -3,17 +3,19 @@
 - Author: Anuja Jayasinghe
 - Reviewers: TBD
 - Created: 2026-08-05
-- Updated: 2026-08-06
+- Updated: 2026-08-09
 - Issue: TBD
-- Status: Implemented — `newClient` landed in `a2a-ballerina/a2a/client.bal`
-  as proposed below, plus the `selectInterface` protocolVersion-ranking fix
-  this doc's construction section describes. `new (serviceUrl, ...)` was kept
-  fully public rather than deprecated, per a check against the A2A spec
-  (silent on constructor API design) and both reference SDKs — Python's
-  `a2a-sdk` keeps `BaseClient.__init__` public alongside `create_client`;
-  Java's `ClientBuilder` is a complete public entry point in its own right.
-  Neither collapses to one sole public constructor, so this SDK doesn't
-  either.
+- Status: Revised — the implementation currently in
+  `a2a-ballerina/a2a/client.bal` has `newClient` as a separate factory
+  function alongside a low-level positional `new (serviceUrl, ...)`
+  constructor, per the two-entry-point rationale an earlier version of
+  this doc argued for (spec silence + Python/Java SDK precedent). Nothing
+  built on this client has shipped externally yet, so that decision has
+  been revisited: this revision folds `newClient` into the constructor
+  itself (`new (agent, serviceUrl?, ...)`, `agent: AgentCard|string`),
+  removing `newClient` as a separate function. The implementation has not
+  yet been updated to match — this section will move back to Implemented
+  once it is.
 
 ## Summary
 
@@ -131,25 +133,59 @@ authentication.
 
 A caller may have either a URL or an already-resolved card in hand,
 depending on the situation, so construction accepts either as a union,
-not just the card:
+directly in the constructor — there is no separate factory function:
 
 ```ballerina
-public isolated function newClient(AgentCard|string agent, ...) returns Client|error;
+public isolated function init(
+        AgentCard|string agent,
+        string? serviceUrl = (),
+        http:ClientConfiguration clientConfig = {},
+        map<string> headers = {},
+        string? tenant = (),
+        string[] requestedExtensions = [],
+        map<string> credentials = {},
+        int maxReconnectAttempts = 0,
+        TransportBinding binding = "JSONRPC") returns error?;
 ```
 
 ```ballerina
 // caller already resolved the card (e.g. for display, or reused across clients)
 a2a:AgentCard card = check a2a:resolveAgentCard(url);
-a2a:Client agentClient = check a2a:newClient(card);
+a2a:Client agentClient = check new (card);
 
-// caller only has the URL — newClient resolves the card itself
-a2a:Client agentClient = check a2a:newClient(url);
+// caller only has the URL — the constructor resolves the card itself
+a2a:Client agentClient = check new (url);
 ```
 
 Either way, only one of URL or card is ever passed once — never both. When a
-card is passed, its service URL is derived internally rather than re-supplied
-by the caller; when a URL is passed, `newClient` resolves the card once and
-proceeds identically from there.
+card is passed, its service URL is derived internally rather than
+re-supplied by the caller. When a URL is passed, the constructor **always**
+resolves the card first — a plain `new (url)` never skips straight to a
+fetch-free construction, since the card is what the constructor needs to
+detect protocol version, derive the URL, and resolve auth.
+
+The optional `serviceUrl` parameter is the escape hatch for when the
+client genuinely needs to point at a URL other than the one the resolved
+card would derive — proxies, tests, or a card with several interfaces
+where a non-preferred one is wanted deliberately. It overrides only which
+URL is dialed; protocol-version detection, auth resolution, and tenant are
+still derived from `agent` as normal.
+
+Ballerina object constructors can already accept a union type and branch
+on it internally, so `newClient` never needed to exist as a separate
+function purely to accept `AgentCard|string` — that part of the earlier
+design was achievable in `init` directly. An earlier version of this
+proposal kept `newClient` and the raw constructor as two separate public
+entry points, citing spec silence on constructor design and both
+reference SDKs (Python's `a2a-sdk`, Java's `ClientBuilder`) keeping a
+low-level constructor public alongside a convenience factory. That
+precedent is real, but nothing built on this client has shipped
+externally yet, so the extra API surface it bought — a second public
+entry point, and the "is this genuine layering or just a patch on a
+gap-ridden API" question that came with it — is not worth carrying
+forward for a v1. The `serviceUrl` override above preserves the one case
+the raw constructor existed for; everything else it did is now just
+`init` handling its own union argument.
 
 The URL is derived via the matching interface:
 
@@ -165,60 +201,11 @@ just the first matching entry — so the ordering of a card's
 `supportedInterfaces` can't silently downgrade the protocol version used; it
 errors if no entry matches the binding. If the selected interface declares a
 `tenant`, it's read automatically instead of requiring the caller to copy it
-by hand; an explicitly-passed `tenant` still wins.
-
-The existing positional constructor remains available:
-
-```ballerina
-public isolated function init(
-        string serviceUrl,
-        http:ClientConfiguration clientConfig = {},
-        map<string> headers = {},
-        string? tenant = (),
-        AgentCard? agentCard = (),
-        string[] requestedExtensions = [],
-        map<string> credentials = {},
-        int maxReconnectAttempts = 0,
-        TransportBinding binding = "JSONRPC") returns error?;
-```
-
-Called as `new (serviceUrl, ..., agentCard = card)` — not as a deprecated
-escape hatch superseded by
-`newClient`, but as a fully supported, independently public low-level path
-in its own right, for cases where the client genuinely needs to point at a
-different URL than the one the card declares (proxies, tests, or a card with
-several interfaces where a non-preferred one is wanted deliberately), or
-where the caller has already resolved every argument itself and has no need
-for `newClient`'s derivation logic at all. `newClient` is implemented in
-terms of this constructor, not a replacement for it.
-
-This two-entry-point shape was checked against the A2A spec and both
-reference SDKs before settling on it, specifically to answer whether a
-factory calling into an existing raw constructor is genuine layering or just
-a patch on top of a gap-ridden API:
-
-- **The A2A spec** (`specification.md` §8.2/§8.3) is silent on constructor/
-  factory API design — that's implementation-defined — but its §8.3.2 client
-  protocol-selection algorithm (parse `supportedInterfaces`, select a
-  supported transport, prefer earlier entries, use that entry's URL) is
-  exactly what `primaryUrl`/`selectInterface` already implement, confirming
-  card→URL derivation as correct default behavior.
-- **Python's `a2a-sdk`** keeps `BaseClient.__init__` — the raw,
-  fully-resolved constructor — fully public alongside `ClientFactory.create`/
-  `create_from_url` and the `create_client(agent: str | AgentCard, ...)`
-  convenience function `newClient` mirrors almost exactly. Its own docstring
-  frames the low-level path as intentional, not discouraged: *"For reusing a
-  factory across multiple agents or registering custom transports, use
-  `ClientFactory` directly instead."*
-- **Java's SDK** makes the raw `Client` constructor package-private, but only
-  because it's reached through `ClientBuilder` — itself a complete,
-  independently public entry point (`Client.builder(card).withTransport(...)
-  .build()`). Java's builder always requires an already-resolved `AgentCard`
-  and has no bare-URL convenience or URL-override concept at all; resolving a
-  card from a URL is a wholly separate public step (`A2A.getAgentCard(url)`).
-
-Neither reference SDK collapses to a single sole public constructor, so
-`ballerina/a2a` doesn't either — `new (...)` stays public.
+by hand; an explicitly-passed `tenant` still wins. This matches the A2A
+spec's own client protocol-selection algorithm (§8.3.2: parse
+`supportedInterfaces`, select a supported transport, prefer earlier
+entries, use that entry's URL) — the spec itself is silent on
+constructor/factory API design, so that part is this proposal's own call.
 
 ## Design 
 
@@ -583,11 +570,11 @@ public type ListTaskPushNotificationConfigsResult record {|
 public isolated client class Client {
 
     public isolated function init(
-            string serviceUrl,
+            AgentCard|string agent,
+            string? serviceUrl = (),
             http:ClientConfiguration clientConfig = {},
             map<string> headers = {},
             string? tenant = (),
-            AgentCard? agentCard = (),
             string[] requestedExtensions = [],
             map<string> credentials = {},
             int maxReconnectAttempts = 0,
@@ -677,8 +664,9 @@ public type ExtendedAgentCardNotConfiguredError distinct A2AError;
 public type ExtensionSupportRequiredError distinct A2AError;
 public type A2AInternalError distinct A2AError;         // catch-all / unrecognized code
 
-// Returned by newClient/buildAuthFromCard when a card's declared security
-// requirements can't be automatically resolved from the given credentials.
+// Returned by the constructor/buildAuthFromCard when a card's declared
+// security requirements can't be automatically resolved from the given
+// credentials.
 public type AuthResolutionError distinct A2AError;
 
 // Returned by verifyAgentCardSignature for an out-of-range signatureIndex,
@@ -718,13 +706,13 @@ import ballerina/io;
 public function main() returns error? {
     string url = "https://weather-agent.example.com";
 
-    // newClient accepts either a URL or an already-resolved AgentCard —
-    // pass whichever you have; only one is ever needed.
-    a2a:Client agentClient = check a2a:newClient(url);
+    // The constructor accepts either a URL or an already-resolved
+    // AgentCard — pass whichever you have; only one is ever needed.
+    a2a:Client agentClient = check new (url);
 
     // equivalent, if the card was already resolved for some other reason:
     // a2a:AgentCard card = check a2a:resolveAgentCard(url);
-    // a2a:Client agentClient = check a2a:newClient(card);
+    // a2a:Client agentClient = check new (card);
 
     a2a:Message request = {
         role: "user",
