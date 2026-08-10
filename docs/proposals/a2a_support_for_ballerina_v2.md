@@ -201,7 +201,6 @@ instantiated already says which transport it speaks:
 // a2a:Client (common, auto-detecting)
 public isolated function init(
         AgentCard|string agent,
-        string? serviceUrl = (),
         http:ClientConfiguration clientConfig = {},
         map<string> headers = {},
         string? tenant = (),
@@ -213,7 +212,6 @@ public isolated function init(
 // a2a:JsonRpcClient / a2a:RestClient / a2a:GrpcClient — identical, minus binding
 public isolated function init(
         AgentCard|string agent,
-        string? serviceUrl = (),
         http:ClientConfiguration clientConfig = {},
         map<string> headers = {},
         string? tenant = (),
@@ -243,45 +241,6 @@ whichever concrete client it constructs; a directly-constructed concrete
 client resolves it itself, since there's no common client upstream to
 have done it already.
 
-```ballerina
-string? serviceUrl = ()
-```
-
-The optional `serviceUrl` parameter is the escape hatch for when the
-client genuinely needs to point at a URL other than the one the resolved
-card would derive — proxies, tests, or a card with several interfaces
-where a non-preferred one is wanted deliberately. It overrides only which
-URL is dialed; protocol-version detection, auth resolution, and tenant are
-still derived from `agent` as normal.
-
-Neither the spec nor either reference SDK mandates this parameter — it's
-this library's own addition, not something being ported in:
-
-- **The spec** is silent on client construction entirely (see above); it
-  has nothing to say about a URL-override concept one way or the other.
-- **Python's `a2a-sdk`** has no equivalent lightweight override.
-  `ClientFactory.create(card, ...)` always derives the URL from the card
-  itself (`client_factory.py`), with no override parameter; redirecting
-  requests elsewhere means constructing and passing an entire custom
-  `ClientTransport` instance to `BaseClient.__init__` — a materially
-  heavier mechanism than a single optional string.
-- **Java's SDK** has no URL-override concept at all — `ClientBuilder`
-  requires an already-resolved `AgentCard` and dials wherever it points,
-  full stop.
-
-`serviceUrl` exists because this library's own test suite needs it: tests
-construct a client against a local mock server URL while passing a
-production-shaped `AgentCard` for realistic protocol/auth negotiation
-(e.g. `client_test.bal` — `new (getGrpcMockUrl(), agentCard = card,
-binding = "GRPC")`, `new (getServerBaseUrl(), agentCard = card,
-credentials = {...})`). Without an override, exercising that combination
-would require either a mock server that also serves a matching card, or
-constructing a card whose declared URL happens to be the mock server —
-both more indirect than a parameter for the one thing being overridden.
-This applies identically whether the constructing type is the common
-`Client` or one of the concrete `JsonRpcClient`/`RestClient`/`GrpcClient`
-types (see the Client section under Design, below).
-
 Ballerina object constructors can already accept a union type and branch
 on it internally, so `newClient` never needed to exist as a separate
 function purely to accept `AgentCard|string` — that part of the earlier
@@ -294,9 +253,26 @@ precedent is real, but nothing built on this client has shipped
 externally yet, so the extra API surface it bought — a second public
 entry point, and the "is this genuine layering or just a patch on a
 gap-ridden API" question that came with it — is not worth carrying
-forward for a v1. The `serviceUrl` override above preserves the one case
-the raw constructor existed for; everything else it did is now just
-`init` handling its own union argument.
+forward for a v1. This drops one thing the raw constructor's `agentCard`
+parameter allowed — pointing the client at a URL other than the one the
+card declares (proxies, tests, a deliberately non-preferred interface).
+That's a deliberate scope decision, not an oversight: the URL a client
+dials should come from what the Agent Card declares and nowhere else,
+since resolving (and optionally verifying) the card exists to establish
+where it's safe to send requests and credentials in the first place — an
+unchecked override parameter reintroduces exactly the redirection
+surface that resolving the card was meant to close off, for no
+spec-required or reference-SDK-precedented reason (neither Python's
+`a2a-sdk` nor Java's SDK exposes an equivalent). This applies identically
+to all four client types — the common `Client` and the three concrete
+ones. Whether to add a narrower, deliberately-scoped override later is a
+separate decision — it isn't a breaking change to add on top of this —
+but it needs its own justification and sign-off, not a default inclusion
+because it seemed convenient. Until then, code needing to point at a URL
+other than a card's own declared interfaces (including this library's
+own tests) constructs an `AgentCard` whose declared interfaces already
+point where it needs to go, rather than the constructor accepting an
+override.
 
 The URL is derived via the matching interface:
 
@@ -761,7 +737,6 @@ public isolated client class Client {
 
     public isolated function init(
             AgentCard|string agent,
-            string? serviceUrl = (),
             http:ClientConfiguration clientConfig = {},
             map<string> headers = {},
             string? tenant = (),
@@ -791,7 +766,6 @@ public isolated client class GrpcClient {
 
     public isolated function init(
             AgentCard|string agent,
-            string? serviceUrl = (),
             http:ClientConfiguration clientConfig = {},
             map<string> headers = {},
             string? tenant = (),
