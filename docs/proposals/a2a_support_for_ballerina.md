@@ -99,50 +99,40 @@ Authentication only applies to the separate, authenticated extended card
 (§3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 
-> **Pending lead approval — not yet confirmed.** Like the (removed)
-> `serviceUrl` override, `verifyAgentCardSignature` is this library going
-> beyond exactly what the spec requires: the spec mandates the six-step
-> verification *procedure* (§8.4.3) below, but not a named API for it,
-> and neither reference SDK ships an equivalent helper. Unlike
-> `serviceUrl`, this isn't being removed outright here — signature
-> verification has real security value and the case for keeping it looks
-> stronger — but whether to ship it as public API still needs the same
-> discussion and sign-off before this section is treated as settled.
-
-Signature verification is a separate, explicit step — `resolveAgentCard`
-does not call it automatically, since not every card is signed and the
-caller must supply the verifying key out-of-band:
-
-```ballerina
-public isolated function verifyAgentCardSignature(
-        AgentCard card,
-        crypto:PublicKey publicKey,
-        int signatureIndex = 0) returns boolean|SignatureVerificationError|UnsupportedSignatureAlgorithmError;
-```
-
-```ballerina
-a2a:AgentCard card = check a2a:resolveAgentCard(url);
-boolean|error valid = a2a:verifyAgentCardSignature(card, publicKey);
-```
-
-The spec mandates the *procedure* here, not a named API: §8.4.3 states
-clients verifying Agent Card signatures **MUST** follow its six-step
-canonicalize-and-verify sequence, and **SHOULD** verify at least one
-signature before trusting a card — but it stops there, and neither
-reference SDK (Python `a2a-sdk`, Java) ships an equivalent helper;
-callers are left to hand-roll it. `verifyAgentCardSignature` is
-`ballerina/a2a` implementing that MUST-behavior as a convenience function
-the reference SDKs don't provide, not a spec-defined method being wrapped.
-
-`verifyAgentCardSignature` checks the card's embedded JWS signature
-(RS256/ES256) against the given key, returning `false` — not an error — for
-a mismatched or tampered signature; only a malformed JWS or an unsupported
-algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes —
-synthesising `supportedInterfaces` from the older `url` /
-`preferredTransport` / `additionalInterfaces` fields — so an agent that only
-declares a transport that way is still reachable. The resolved card drives
-protocol-version detection (1.0 vs. 0.3) and, when credentials are supplied,
-authentication.
+> Signature verification is a separate, explicit step — `resolveAgentCard`
+> does not call it automatically, since not every card is signed and the
+> caller must supply the verifying key out-of-band:
+>
+> ```ballerina
+> public isolated function verifyAgentCardSignature(
+>         AgentCard card,
+>         crypto:PublicKey publicKey,
+>         int signatureIndex = 0) returns boolean|SignatureVerificationError|UnsupportedSignatureAlgorithmError;
+> ```
+>
+> ```ballerina
+> a2a:AgentCard card = check a2a:resolveAgentCard(url);
+> boolean|error valid = a2a:verifyAgentCardSignature(card, publicKey);
+> ```
+>
+> The spec mandates the *procedure* here, not a named API: §8.4.3 states
+> clients verifying Agent Card signatures **MUST** follow its six-step
+> canonicalize-and-verify sequence, and **SHOULD** verify at least one
+> signature before trusting a card — but it stops there, and neither
+> reference SDK (Python `a2a-sdk`, Java) ships an equivalent helper;
+> callers are left to hand-roll it. `verifyAgentCardSignature` is
+> `ballerina/a2a` implementing that MUST-behavior as a convenience function
+> the reference SDKs don't provide, not a spec-defined method being wrapped.
+>
+> `verifyAgentCardSignature` checks the card's embedded JWS signature
+> (RS256/ES256) against the given key, returning `false` — not an error — for
+> a mismatched or tampered signature; only a malformed JWS or an unsupported
+> algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes —
+> synthesising `supportedInterfaces` from the older `url` /
+> `preferredTransport` / `additionalInterfaces` fields — so an agent that only
+> declares a transport that way is still reachable. The resolved card drives
+> protocol-version detection (1.0 vs. 0.3) and, when credentials are supplied,
+> authentication.
 
 ### Client construction
 
