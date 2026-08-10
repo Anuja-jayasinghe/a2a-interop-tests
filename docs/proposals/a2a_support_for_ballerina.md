@@ -175,6 +175,31 @@ where a non-preferred one is wanted deliberately. It overrides only which
 URL is dialed; protocol-version detection, auth resolution, and tenant are
 still derived from `agent` as normal.
 
+Neither the spec nor either reference SDK mandates this parameter — it's
+this library's own addition, not something being ported in:
+
+- **The spec** is silent on client construction entirely (see above); it
+  has nothing to say about a URL-override concept one way or the other.
+- **Python's `a2a-sdk`** has no equivalent lightweight override.
+  `ClientFactory.create(card, ...)` always derives the URL from the card
+  itself (`client_factory.py`), with no override parameter; redirecting
+  requests elsewhere means constructing and passing an entire custom
+  `ClientTransport` instance to `BaseClient.__init__` — a materially
+  heavier mechanism than a single optional string.
+- **Java's SDK** has no URL-override concept at all — `ClientBuilder`
+  requires an already-resolved `AgentCard` and dials wherever it points,
+  full stop.
+
+`serviceUrl` exists because this library's own test suite needs it: tests
+construct a `Client` against a local mock server URL while passing a
+production-shaped `AgentCard` for realistic protocol/auth negotiation
+(e.g. `client_test.bal` — `new (getGrpcMockUrl(), agentCard = card,
+binding = "GRPC")`, `new (getServerBaseUrl(), agentCard = card,
+credentials = {...})`). Without an override, exercising that combination
+would require either a mock server that also serves a matching card, or
+constructing a card whose declared URL happens to be the mock server —
+both more indirect than a parameter for the one thing being overridden.
+
 Ballerina object constructors can already accept a union type and branch
 on it internally, so `newClient` never needed to exist as a separate
 function purely to accept `AgentCard|string` — that part of the earlier
