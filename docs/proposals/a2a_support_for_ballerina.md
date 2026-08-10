@@ -1,11 +1,11 @@
-# A2A Support for Ballerina — Client
+# A2A Support for Ballerina - Client
 
 - Author: Anuja Jayasinghe
 - Reviewers: TBD
 - Created: 2026-08-05
 - Updated: 2026-08-09
 - Issue: TBD
-- Status: Revised — the implementation currently in
+- Status: Revised - the implementation currently in
   `a2a-ballerina/a2a/client.bal` has `newClient` as a separate factory
   function alongside a low-level positional `new (serviceUrl, ...)`
   constructor, per the two-entry-point rationale an earlier version of
@@ -15,11 +15,11 @@
   itself (`new (agent, ...)`, `agent: AgentCard|string`), removing
   `newClient` as a separate function. It also drops the raw
   constructor's `agentCard`-with-a-different-`serviceUrl` override
-  capability entirely — no URL-override parameter of any kind — since
+  capability entirely - no URL-override parameter of any kind - since
   neither the spec nor either reference SDK has an equivalent, and
   adding client-side surface beyond what the spec requires needs its own
   justification and sign-off rather than default inclusion. The
-  implementation has not yet been updated to match — this section will
+  implementation has not yet been updated to match - this section will
   move back to Implemented once it is.
 
 ## Summary
@@ -31,7 +31,7 @@ is a complete client implementation of the
 [Agent2Agent (A2A) protocol](https://a2a-protocol.org), an open protocol that
 lets independent AI agents discover each other's capabilities and exchange
 tasks and messages over a common wire format. It lets any Ballerina service or
-program act as an A2A client — discovering an agent, negotiating protocol
+program act as an A2A client - discovering an agent, negotiating protocol
 version and transport, and driving the full client-side operation set defined
 by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
 
@@ -40,14 +40,14 @@ by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
 - A single `Client` type that talks to any spec-compliant A2A agent,
   regardless of transport binding or protocol version (1.0, with a 0.3
   compatibility mode).
-- Agent discovery via Agent Cards — fetching, caching, and verifying them —
+- Agent discovery via Agent Cards - fetching, caching, and verifying them -
   used to drive protocol/auth negotiation.
 - Full coverage of the client-side operations defined by A2A 9.4: message
   send/stream, task lifecycle (get/cancel/list/subscribe), push-notification
   configuration, and extended card retrieval.
 - Resilient streaming: Server-Sent Events with automatic reconnection on a
   dropped (non-terminal) stream.
-- Lay the groundwork for a Ballerina service to also *host* an A2A agent —
+- Lay the groundwork for a Ballerina service to also *host* an A2A agent -
   the client's types and error taxonomy are designed to be reused, not
   redesigned, by the listener proposal that follows this one.
 
@@ -58,7 +58,7 @@ Agent-to-agent interoperability is an emerging need for Ballerina's
 integration-first audience: a Ballerina service is often the natural place to
 call out to an external agent (or expose one, once the listener side exists).
 No A2A client existed for Ballerina. Hand-rolling JSON-RPC/REST/gRPC calls
-against the spec per project is repetitive and error-prone — particularly
+against the spec per project is repetitive and error-prone - particularly
 around agent card parsing, protocol-version detection, and the small but real
 differences between the 1.0 and 0.3 versions of the protocol. A single
 idiomatic client, following the same shape as Ballerina's other generated and
@@ -70,7 +70,7 @@ calls), removes that repetition.
 ### Transports
 
 The A2A spec allows a server to expose JSON-RPC, REST, or gRPC bindings for
-the same operation set. `Client` supports all three under one API — the
+the same operation set. `Client` supports all three under one API - the
 binding is chosen at construction (`binding = "JSONRPC" | "HTTP+JSON" |
 "GRPC"`) and every `remote function` call dispatches internally:
 
@@ -94,12 +94,12 @@ public isolated function resolveAgentCard(
 
 `resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`.
 Per spec 14.3, this well-known endpoint is public and unauthenticated by
-design — `headers` above exists for signature/proxy use, not credentials.
+design - `headers` above exists for signature/proxy use, not credentials.
 Authentication only applies to the separate, authenticated extended card
 (3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 
-> Signature verification is a separate, explicit step — `resolveAgentCard`
+> Signature verification is a separate, explicit step - `resolveAgentCard`
 > does not call it automatically, since not every card is signed and the
 > caller must supply the verifying key out-of-band:
 >
@@ -118,18 +118,18 @@ Authentication only applies to the separate, authenticated extended card
 > The spec mandates the *procedure* here, not a named API: 8.4.3 states
 > clients verifying Agent Card signatures **MUST** follow its six-step
 > canonicalize-and-verify sequence, and **SHOULD** verify at least one
-> signature before trusting a card — but it stops there, and neither
+> signature before trusting a card - but it stops there, and neither
 > reference SDK (Python `a2a-sdk`, Java) ships an equivalent helper;
 > callers are left to hand-roll it. `verifyAgentCardSignature` is
 > `ballerina/a2a` implementing that MUST-behavior as a convenience function
 > the reference SDKs don't provide, not a spec-defined method being wrapped.
 >
 > `verifyAgentCardSignature` checks the card's embedded JWS signature
-> (RS256/ES256) against the given key, returning `false` — not an error — for
+> (RS256/ES256) against the given key, returning `false` - not an error - for
 > a mismatched or tampered signature; only a malformed JWS or an unsupported
-> algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes —
+> algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes -
 > synthesising `supportedInterfaces` from the older `url` /
-> `preferredTransport` / `additionalInterfaces` fields — so an agent that only
+> `preferredTransport` / `additionalInterfaces` fields - so an agent that only
 > declares a transport that way is still reachable. The resolved card drives
 > protocol-version detection (1.0 vs. 0.3) and, when credentials are supplied,
 > authentication.
@@ -138,7 +138,7 @@ Authentication only applies to the separate, authenticated extended card
 
 A caller may have either a URL or an already-resolved card in hand,
 depending on the situation, so construction accepts either as a union,
-directly in the constructor — there is no separate factory function:
+directly in the constructor - there is no separate factory function:
 
 ```ballerina
 public isolated function init(
@@ -157,42 +157,42 @@ public isolated function init(
 a2a:AgentCard card = check a2a:resolveAgentCard(url);
 a2a:Client agentClient = check new (card);
 
-// caller only has the URL — the constructor resolves the card itself
+// caller only has the URL - the constructor resolves the card itself
 a2a:Client agentClient = check new (url);
 ```
 
-Either way, only one of URL or card is ever passed once — never both. When a
+Either way, only one of URL or card is ever passed once - never both. When a
 card is passed, its service URL is derived internally rather than
 re-supplied by the caller. When a URL is passed, the constructor **always**
-resolves the card first — a plain `new (url)` never skips straight to a
+resolves the card first - a plain `new (url)` never skips straight to a
 fetch-free construction, since the card is what the constructor needs to
 detect protocol version, derive the URL, and resolve auth.
 
 Ballerina object constructors can already accept a union type and branch
 on it internally, so `newClient` never needed to exist as a separate
-function purely to accept `AgentCard|string` — that part of the earlier
+function purely to accept `AgentCard|string` - that part of the earlier
 design was achievable in `init` directly. An earlier version of this
 proposal kept `newClient` and the raw constructor as two separate public
 entry points, citing spec silence on constructor design and both
 reference SDKs (Python's `a2a-sdk`, Java's `ClientBuilder`) keeping a
 low-level constructor public alongside a convenience factory. That
 precedent is real, but nothing built on this client has shipped
-externally yet, so the extra API surface it bought — a second public
+externally yet, so the extra API surface it bought - a second public
 entry point, and the "is this genuine layering or just a patch on a
-gap-ridden API" question that came with it — is not worth carrying
+gap-ridden API" question that came with it - is not worth carrying
 forward for a v1. This drops one thing the raw constructor's `agentCard`
-parameter allowed — pointing the client at a URL other than the one the
+parameter allowed - pointing the client at a URL other than the one the
 card declares (proxies, tests, a deliberately non-preferred interface).
 That's a deliberate scope decision, not an oversight: the URL a client
 dials should come from what the Agent Card declares and nowhere else,
 since the whole point of resolving and (optionally) verifying the card
-is establishing where it's safe to send requests and credentials — an
+is establishing where it's safe to send requests and credentials - an
 unchecked override parameter reintroduces exactly the kind of
 redirection surface that resolving the card was meant to close off, for
 no spec-required or reference-SDK-precedented reason (neither Python's
 `a2a-sdk` nor Java's SDK exposes an equivalent). Whether to add a
-narrower, deliberately-scoped override later is a separate decision — it
-isn't a breaking change to add on top of this — but it needs its own
+narrower, deliberately-scoped override later is a separate decision - it
+isn't a breaking change to add on top of this - but it needs its own
 justification and sign-off, not a default inclusion because it seemed
 convenient. Until then, code needing to point at a URL other than a
 card's own declared interfaces (including this library's own tests)
@@ -208,15 +208,15 @@ public isolated function selectInterface(
 ```
 
 `selectInterface` returns the best-ranked `supportedInterfaces` entry for the
-requested binding — preferring the highest protocol version declared, not
-just the first matching entry — so the ordering of a card's
+requested binding - preferring the highest protocol version declared, not
+just the first matching entry - so the ordering of a card's
 `supportedInterfaces` can't silently downgrade the protocol version used; it
 errors if no entry matches the binding. If the selected interface declares a
 `tenant`, it's read automatically instead of requiring the caller to copy it
 by hand; an explicitly-passed `tenant` still wins. This matches the A2A
 spec's own client protocol-selection algorithm (8.3.2: parse
 `supportedInterfaces`, select a supported transport, prefer earlier
-entries, use that entry's URL) — the spec itself is silent on
+entries, use that entry's URL) - the spec itself is silent on
 constructor/factory API design, so that part is this proposal's own call.
 
 ## Design 
@@ -255,7 +255,7 @@ public enum Role {
 }
 
 // Exactly one of text/raw/url/data is set (variant by field presence, no
-// discriminator — v1.0 dropped the old `kind` tag).
+// discriminator - v1.0 dropped the old `kind` tag).
 public type Part record {|
     string? text?;
     byte[]? raw?;             // inline file bytes; base64 on the wire
@@ -287,8 +287,8 @@ public enum TaskState {
     TASK_STATE_FAILED,          // terminal
     TASK_STATE_CANCELED,        // terminal
     TASK_STATE_REJECTED,        // terminal
-    TASK_STATE_INPUT_REQUIRED,  // interrupted — resumable via follow-up message
-    TASK_STATE_AUTH_REQUIRED    // interrupted — resumable via follow-up message
+    TASK_STATE_INPUT_REQUIRED,  // interrupted - resumable via follow-up message
+    TASK_STATE_AUTH_REQUIRED    // interrupted - resumable via follow-up message
 }
 
 public type TaskStatus record {|
@@ -348,7 +348,7 @@ public type StreamResponse record {|
     json...;
 |};
 
-// Wrapper returned by a unary sendMessage call — a narrower sibling of
+// Wrapper returned by a unary sendMessage call - a narrower sibling of
 // StreamResponse, since a non-streaming reply can only ever be a Task or
 // a Message (spec 3.1.1).
 public type SendMessageResult record {|
@@ -480,7 +480,7 @@ public type SecurityScheme ApiKeySecurityScheme|HttpAuthSecurityScheme|OAuth2Sec
     |OpenIdConnectSecurityScheme|MutualTlsSecurityScheme;
 
 // A set of scheme names that must all be satisfied together (an AND).
-// AgentCard/AgentSkill express a list of these — an OR across the list.
+// AgentCard/AgentSkill express a list of these - an OR across the list.
 public type SecurityRequirement map<string[]>;
 
 public type OAuthFlows record {|
@@ -685,14 +685,14 @@ public type AuthResolutionError distinct A2AError;
 public type SignatureVerificationError distinct A2AError;
 
 // Returned by verifyAgentCardSignature when a signature's JWS `alg` isn't
-// RS256 or ES256 — the only algorithms ballerina/crypto can verify.
+// RS256 or ES256 - the only algorithms ballerina/crypto can verify.
 public type UnsupportedSignatureAlgorithmError distinct A2AError;
 ```
 
 All three transports map their native errors onto this same hierarchy:
 JSON-RPC error codes map directly (`-32001` → `TaskNotFoundError`, etc.);
 REST disambiguates via the `reason` field of a `google.rpc.ErrorInfo` entry
-(HTTP status alone can't — seven distinct A2A errors all return 400); gRPC
+(HTTP status alone can't - seven distinct A2A errors all return 400); gRPC
 maps by status code alone, since `ballerina/grpc` exposes no status details
 to disambiguate further.
 
@@ -718,7 +718,7 @@ public function main() returns error? {
     string url = "https://weather-agent.example.com";
 
     // The constructor accepts either a URL or an already-resolved
-    // AgentCard — pass whichever you have; only one is ever needed.
+    // AgentCard - pass whichever you have; only one is ever needed.
     a2a:Client agentClient = check new (url);
 
     // equivalent, if the card was already resolved for some other reason:

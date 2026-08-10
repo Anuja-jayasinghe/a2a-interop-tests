@@ -1,25 +1,25 @@
-# A2A Support for Ballerina — Client (Alternative: Transport-Specific Clients)
+# A2A Support for Ballerina - Client (Alternative: Transport-Specific Clients)
 
 - Author: Anuja Jayasinghe
 - Reviewers: TBD
 - Created: 2026-08-10
 - Updated: 2026-08-10
 - Issue: TBD
-- Status: Draft — alternative architecture, for side-by-side comparison
+- Status: Draft - alternative architecture, for side-by-side comparison
   against [`a2a_support_for_ballerina.md`](./a2a_support_for_ballerina.md).
   Not implemented.
 - Relationship to the other proposal: everything here is identical to
   the sibling proposal **except** the Client architecture (Architecture
   Overview → Transports, and the Client section under Design). The
   constructor-merge decision (`newClient` folded into `init`) is shared
-  by both proposals unchanged — it isn't part of what's being compared
+  by both proposals unchanged - it isn't part of what's being compared
   here. This doc exists to weigh one specific architectural question:
   one `Client` type with internal per-call transport branching (the
   sibling proposal, matching what's currently implemented) versus
   separate types per transport binding (this doc). Whichever is chosen,
   the losing variant is dropped before this lands.
 - Naming note: `JsonRpcClient`/`RestClient`/`GrpcClient` and `AgentClient`
-  below are placeholders, not final — naming wasn't settled as of this
+  below are placeholders, not final - naming wasn't settled as of this
   draft.
 
 ## Summary
@@ -31,7 +31,7 @@ is a complete client implementation of the
 [Agent2Agent (A2A) protocol](https://a2a-protocol.org), an open protocol that
 lets independent AI agents discover each other's capabilities and exchange
 tasks and messages over a common wire format. It lets any Ballerina service or
-program act as an A2A client — discovering an agent, negotiating protocol
+program act as an A2A client - discovering an agent, negotiating protocol
 version and transport, and driving the full client-side operation set defined
 by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
 
@@ -39,17 +39,17 @@ by the spec, over JSON-RPC, REST (HTTP+JSON), or gRPC.
 
 - A common, auto-detecting entry point that talks to any spec-compliant
   A2A agent regardless of transport binding or protocol version (1.0,
-  with a 0.3 compatibility mode) — and, for callers who want it, direct
+  with a 0.3 compatibility mode) - and, for callers who want it, direct
   access to a binding-specific client without going through auto-detection.
   A shared interface type keeps binding-agnostic code possible either way.
-- Agent discovery via Agent Cards — fetching, caching, and verifying them —
+- Agent discovery via Agent Cards - fetching, caching, and verifying them -
   used to drive protocol/auth negotiation.
 - Full coverage of the client-side operations defined by A2A 9.4: message
   send/stream, task lifecycle (get/cancel/list/subscribe), push-notification
   configuration, and extended card retrieval.
 - Resilient streaming: Server-Sent Events with automatic reconnection on a
   dropped (non-terminal) stream.
-- Lay the groundwork for a Ballerina service to also *host* an A2A agent —
+- Lay the groundwork for a Ballerina service to also *host* an A2A agent -
   the client's types and error taxonomy are designed to be reused, not
   redesigned, by the listener proposal that follows this one.
 
@@ -60,7 +60,7 @@ Agent-to-agent interoperability is an emerging need for Ballerina's
 integration-first audience: a Ballerina service is often the natural place to
 call out to an external agent (or expose one, once the listener side exists).
 No A2A client existed for Ballerina. Hand-rolling JSON-RPC/REST/gRPC calls
-against the spec per project is repetitive and error-prone — particularly
+against the spec per project is repetitive and error-prone - particularly
 around agent card parsing, protocol-version detection, and the small but real
 differences between the 1.0 and 0.3 versions of the protocol. A single
 idiomatic client, following the same shape as Ballerina's other generated and
@@ -75,8 +75,8 @@ The A2A spec allows a server to expose JSON-RPC, REST, or gRPC bindings for
 the same operation set. Rather than one `Client` type with a `binding`
 field and an `if self.binding == ...` branch inside every `remote
 function` (the sibling proposal's approach), this design gives each
-binding its own concrete client type — `JsonRpcClient`, `RestClient`,
-`GrpcClient` — plus a common `Client` that picks one automatically:
+binding its own concrete client type - `JsonRpcClient`, `RestClient`,
+`GrpcClient` - plus a common `Client` that picks one automatically:
 
 ```ballerina
 public type AgentClient isolated client object {
@@ -89,7 +89,7 @@ public type AgentClient isolated client object {
 ```
 
 `JsonRpcClient`, `RestClient`, and `GrpcClient` each implement
-`AgentClient` — each is a complete, independent client for exactly one
+`AgentClient` - each is a complete, independent client for exactly one
 binding, with no internal branching on a `binding` field, since which
 class you instantiated already says which transport it speaks. The
 common `Client` also implements `AgentClient`, so code written against
@@ -98,12 +98,12 @@ common client or a binding-specific one directly.
 
 **How the common `Client` picks one:** it resolves the Agent Card from
 whatever it's given (fetches if a URL, uses it directly if already a
-card — see Agent Card resolution and Client construction below), reads
+card - see Agent Card resolution and Client construction below), reads
 the card's preferred transport binding, and constructs the matching
 concrete client, handing it the already-resolved card so it isn't
 fetched twice. `Client` then holds that concrete instance as a private
 field and every one of its own remote functions is a one-line delegate
-call to it — construction-time selection, not per-call branching.
+call to it - construction-time selection, not per-call branching.
 
 **Skipping the common client:** a caller who already knows which
 binding they want can construct `JsonRpcClient`/`RestClient`/`GrpcClient`
@@ -115,8 +115,8 @@ a2a:GrpcClient agentClient = check new (url);
 
 Because there's no common client upstream to have resolved anything for
 it in this path, each concrete client type is independently capable of
-resolving an Agent Card itself — reading its capabilities, protocol
-version (1.0 vs. 0.3), security schemes, and tenant — to finish
+resolving an Agent Card itself - reading its capabilities, protocol
+version (1.0 vs. 0.3), security schemes, and tenant - to finish
 constructing itself correctly, exactly as the common client's delegate
 would have. Whether a concrete client's card came from `Client` or from
 resolving it itself, the rest of construction proceeds identically.
@@ -127,7 +127,7 @@ to its chosen concrete instance the same way as unary ones.
 
 **What's still shared internally.** The sibling proposal's Design pillar
 ("one `map<json>` params shape, three bindings, no transport abstraction
-layer") doesn't survive unchanged here — three public client types *is*
+layer") doesn't survive unchanged here - three public client types *is*
 a transport abstraction at the API surface. But the per-binding request/
 response marshaling logic (building a JSON-RPC envelope, REST path
 templating, gRPC stub encoding) doesn't need tripling: each concrete
@@ -147,12 +147,12 @@ public isolated function resolveAgentCard(
 
 `resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`.
 Per spec 14.3, this well-known endpoint is public and unauthenticated by
-design — `headers` above exists for signature/proxy use, not credentials.
+design - `headers` above exists for signature/proxy use, not credentials.
 Authentication only applies to the separate, authenticated extended card
 (3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 
-> Signature verification is a separate, explicit step — `resolveAgentCard`
+> Signature verification is a separate, explicit step - `resolveAgentCard`
 > does not call it automatically, since not every card is signed and the
 > caller must supply the verifying key out-of-band:
 >
@@ -171,18 +171,18 @@ Authentication only applies to the separate, authenticated extended card
 > The spec mandates the *procedure* here, not a named API: 8.4.3 states
 > clients verifying Agent Card signatures **MUST** follow its six-step
 > canonicalize-and-verify sequence, and **SHOULD** verify at least one
-> signature before trusting a card — but it stops there, and neither
+> signature before trusting a card - but it stops there, and neither
 > reference SDK (Python `a2a-sdk`, Java) ships an equivalent helper;
 > callers are left to hand-roll it. `verifyAgentCardSignature` is
 > `ballerina/a2a` implementing that MUST-behavior as a convenience function
 > the reference SDKs don't provide, not a spec-defined method being wrapped.
 >
 > `verifyAgentCardSignature` checks the card's embedded JWS signature
-> (RS256/ES256) against the given key, returning `false` — not an error — for
+> (RS256/ES256) against the given key, returning `false` - not an error - for
 > a mismatched or tampered signature; only a malformed JWS or an unsupported
-> algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes —
+> algorithm returns an error. Parsing also normalises legacy (pre-1.0) card shapes -
 > synthesising `supportedInterfaces` from the older `url` /
-> `preferredTransport` / `additionalInterfaces` fields — so an agent that only
+> `preferredTransport` / `additionalInterfaces` fields - so an agent that only
 > declares a transport that way is still reachable. The resolved card drives
 > protocol-version detection (1.0 vs. 0.3) and, when credentials are supplied,
 > authentication.
@@ -191,7 +191,7 @@ Authentication only applies to the separate, authenticated extended card
 
 A caller may have either a URL or an already-resolved card in hand,
 depending on the situation, so construction accepts either as a union,
-directly in the constructor — there is no separate factory function.
+directly in the constructor - there is no separate factory function.
 This part is identical to the sibling proposal and is shared by all four
 client types; the only difference between them is that the three
 concrete clients don't take a `binding` parameter, since which one you
@@ -209,7 +209,7 @@ public isolated function init(
         int maxReconnectAttempts = 0,
         TransportBinding binding = "JSONRPC") returns error?;
 
-// a2a:JsonRpcClient / a2a:RestClient / a2a:GrpcClient — identical, minus binding
+// a2a:JsonRpcClient / a2a:RestClient / a2a:GrpcClient - identical, minus binding
 public isolated function init(
         AgentCard|string agent,
         http:ClientConfiguration clientConfig = {},
@@ -221,19 +221,19 @@ public isolated function init(
 ```
 
 ```ballerina
-// via the common client — auto-detects the binding from the card
+// via the common client - auto-detects the binding from the card
 a2a:AgentCard card = check a2a:resolveAgentCard(url);
 a2a:Client agentClient = check new (card);
 a2a:Client agentClient = check new (url);
 
-// direct construction — skips auto-detection entirely
+// direct construction - skips auto-detection entirely
 a2a:GrpcClient agentClient = check new (url);
 ```
 
-Either way, only one of URL or card is ever passed once — never both. When a
+Either way, only one of URL or card is ever passed once - never both. When a
 card is passed, its service URL is derived internally rather than
 re-supplied by the caller. When a URL is passed, the constructor **always**
-resolves the card first — a plain `new (url)` never skips straight to a
+resolves the card first - a plain `new (url)` never skips straight to a
 fetch-free construction, since the card is what the constructor needs to
 detect protocol version, derive the URL, and resolve auth. This holds for
 all four types: the common client resolves once and hands the result to
@@ -243,30 +243,30 @@ have done it already.
 
 Ballerina object constructors can already accept a union type and branch
 on it internally, so `newClient` never needed to exist as a separate
-function purely to accept `AgentCard|string` — that part of the earlier
+function purely to accept `AgentCard|string` - that part of the earlier
 design was achievable in `init` directly. An earlier version of this
 proposal kept `newClient` and the raw constructor as two separate public
 entry points, citing spec silence on constructor design and both
 reference SDKs (Python's `a2a-sdk`, Java's `ClientBuilder`) keeping a
 low-level constructor public alongside a convenience factory. That
 precedent is real, but nothing built on this client has shipped
-externally yet, so the extra API surface it bought — a second public
+externally yet, so the extra API surface it bought - a second public
 entry point, and the "is this genuine layering or just a patch on a
-gap-ridden API" question that came with it — is not worth carrying
+gap-ridden API" question that came with it - is not worth carrying
 forward for a v1. This drops one thing the raw constructor's `agentCard`
-parameter allowed — pointing the client at a URL other than the one the
+parameter allowed - pointing the client at a URL other than the one the
 card declares (proxies, tests, a deliberately non-preferred interface).
 That's a deliberate scope decision, not an oversight: the URL a client
 dials should come from what the Agent Card declares and nowhere else,
 since resolving (and optionally verifying) the card exists to establish
-where it's safe to send requests and credentials in the first place — an
+where it's safe to send requests and credentials in the first place - an
 unchecked override parameter reintroduces exactly the redirection
 surface that resolving the card was meant to close off, for no
 spec-required or reference-SDK-precedented reason (neither Python's
 `a2a-sdk` nor Java's SDK exposes an equivalent). This applies identically
-to all four client types — the common `Client` and the three concrete
+to all four client types - the common `Client` and the three concrete
 ones. Whether to add a narrower, deliberately-scoped override later is a
-separate decision — it isn't a breaking change to add on top of this —
+separate decision - it isn't a breaking change to add on top of this -
 but it needs its own justification and sign-off, not a default inclusion
 because it seemed convenient. Until then, code needing to point at a URL
 other than a card's own declared interfaces (including this library's
@@ -283,15 +283,15 @@ public isolated function selectInterface(
 ```
 
 `selectInterface` returns the best-ranked `supportedInterfaces` entry for the
-requested binding — preferring the highest protocol version declared, not
-just the first matching entry — so the ordering of a card's
+requested binding - preferring the highest protocol version declared, not
+just the first matching entry - so the ordering of a card's
 `supportedInterfaces` can't silently downgrade the protocol version used; it
 errors if no entry matches the binding. If the selected interface declares a
 `tenant`, it's read automatically instead of requiring the caller to copy it
 by hand; an explicitly-passed `tenant` still wins. This matches the A2A
 spec's own client protocol-selection algorithm (8.3.2: parse
 `supportedInterfaces`, select a supported transport, prefer earlier
-entries, use that entry's URL) — the spec itself is silent on
+entries, use that entry's URL) - the spec itself is silent on
 constructor/factory API design, so that part is this proposal's own call.
 
 ## Design 
@@ -302,7 +302,7 @@ constructor/factory API design, so that part is this proposal's own call.
   interface all four types (including the common `Client`) implement, so
   code that doesn't care which binding it's talking over can still be
   written against one type. The per-binding marshaling itself can still be
-  shared internal helper functions, same as today — only the public class
+  shared internal helper functions, same as today - only the public class
   boundary multiplies, not the marshaling logic.
 - **Binding selection is a one-time, construction-time decision, made by
   whichever client gets constructed.** The common `Client` makes it by
@@ -321,8 +321,8 @@ constructor/factory API design, so that part is this proposal's own call.
 - **A typed error taxonomy, independent of binding.** All three transports
   map their native errors (JSON-RPC codes, REST `ErrorInfo`, gRPC status) onto
   the same set of `A2AError` subtypes, so calling code doesn't need to know
-  which binding it's talking over — or which of the four client types it
-  holds — to handle failures.
+  which binding it's talking over - or which of the four client types it
+  holds - to handle failures.
 
 ### Public Types
 
@@ -340,7 +340,7 @@ public enum Role {
 }
 
 // Exactly one of text/raw/url/data is set (variant by field presence, no
-// discriminator — v1.0 dropped the old `kind` tag).
+// discriminator - v1.0 dropped the old `kind` tag).
 public type Part record {|
     string? text?;
     byte[]? raw?;             // inline file bytes; base64 on the wire
@@ -372,8 +372,8 @@ public enum TaskState {
     TASK_STATE_FAILED,          // terminal
     TASK_STATE_CANCELED,        // terminal
     TASK_STATE_REJECTED,        // terminal
-    TASK_STATE_INPUT_REQUIRED,  // interrupted — resumable via follow-up message
-    TASK_STATE_AUTH_REQUIRED    // interrupted — resumable via follow-up message
+    TASK_STATE_INPUT_REQUIRED,  // interrupted - resumable via follow-up message
+    TASK_STATE_AUTH_REQUIRED    // interrupted - resumable via follow-up message
 }
 
 public type TaskStatus record {|
@@ -433,7 +433,7 @@ public type StreamResponse record {|
     json...;
 |};
 
-// Wrapper returned by a unary sendMessage call — a narrower sibling of
+// Wrapper returned by a unary sendMessage call - a narrower sibling of
 // StreamResponse, since a non-streaming reply can only ever be a Task or
 // a Message (spec 3.1.1).
 public type SendMessageResult record {|
@@ -565,7 +565,7 @@ public type SecurityScheme ApiKeySecurityScheme|HttpAuthSecurityScheme|OAuth2Sec
     |OpenIdConnectSecurityScheme|MutualTlsSecurityScheme;
 
 // A set of scheme names that must all be satisfied together (an AND).
-// AgentCard/AgentSkill express a list of these — an OR across the list.
+// AgentCard/AgentSkill express a list of these - an OR across the list.
 public type SecurityRequirement map<string[]>;
 
 public type OAuthFlows record {|
@@ -663,8 +663,8 @@ public type ListTaskPushNotificationConfigsResult record {|
 
 ### Client
 
-The full client-side operation set is declared once, as an interface —
-`AgentClient` — that every concrete client type implements identically.
+The full client-side operation set is declared once, as an interface -
+`AgentClient` - that every concrete client type implements identically.
 This is the same operation set the sibling proposal's single `Client`
 class exposes; only where it lives has changed:
 
@@ -747,7 +747,7 @@ public isolated client class Client {
         // Resolves `agent` to an AgentCard (fetching if it's a string),
         // reads the card's preferred binding, and constructs the matching
         // JsonRpcClient/RestClient/GrpcClient with that already-resolved
-        // card — no re-fetch — storing it as `self.delegate`.
+        // card - no re-fetch - storing it as `self.delegate`.
 
     isolated remote function sendMessage(Message message, ...) returns Task|Message|error {
         return self.delegate->sendMessage(message, ...);
@@ -757,7 +757,7 @@ public isolated client class Client {
 ```
 
 **Each transport-specific client** implements `AgentClient` directly,
-with no delegate and no `binding` parameter — the binding is fixed by
+with no delegate and no `binding` parameter - the binding is fixed by
 which type it is:
 
 ```ballerina
@@ -775,11 +775,11 @@ public isolated client class GrpcClient {
         // Resolves `agent` itself if given a string (no common client
         // upstream to have done it), reads capabilities/protocol
         // version/tenant/security schemes from the resolved card, and
-        // finishes constructing — same responsibility the common
+        // finishes constructing - same responsibility the common
         // client's delegate construction step relies on.
 
     isolated remote function sendMessage(Message message, ...) returns Task|Message|error {
-        // gRPC-specific marshaling — may still call a shared internal
+        // gRPC-specific marshaling - may still call a shared internal
         // helper, same as the sibling proposal's grpcCall.
     }
     // ...remainder of AgentClient, implemented via this binding only.
@@ -787,8 +787,8 @@ public isolated client class GrpcClient {
 ```
 
 `JsonRpcClient` and `RestClient` are structurally identical to
-`GrpcClient` above — same constructor shape, same `AgentClient`
-implementation — differing only in which transport's marshaling their
+`GrpcClient` above - same constructor shape, same `AgentClient`
+implementation - differing only in which transport's marshaling their
 remote functions call internally.
 
 Every `tenant` parameter overrides the value read automatically from the
@@ -831,14 +831,14 @@ public type AuthResolutionError distinct A2AError;
 public type SignatureVerificationError distinct A2AError;
 
 // Returned by verifyAgentCardSignature when a signature's JWS `alg` isn't
-// RS256 or ES256 — the only algorithms ballerina/crypto can verify.
+// RS256 or ES256 - the only algorithms ballerina/crypto can verify.
 public type UnsupportedSignatureAlgorithmError distinct A2AError;
 ```
 
 All three transports map their native errors onto this same hierarchy:
 JSON-RPC error codes map directly (`-32001` → `TaskNotFoundError`, etc.);
 REST disambiguates via the `reason` field of a `google.rpc.ErrorInfo` entry
-(HTTP status alone can't — seven distinct A2A errors all return 400); gRPC
+(HTTP status alone can't - seven distinct A2A errors all return 400); gRPC
 maps by status code alone, since `ballerina/grpc` exposes no status details
 to disambiguate further.
 
@@ -864,7 +864,7 @@ public function main() returns error? {
     string url = "https://weather-agent.example.com";
 
     // Common client: resolves the card, auto-detects the binding, and
-    // constructs whichever concrete client matches — caller doesn't
+    // constructs whichever concrete client matches - caller doesn't
     // need to know or care which one it got.
     a2a:AgentClient agentClient = check new a2a:Client(url);
 
@@ -889,12 +889,12 @@ a2a:Task|a2a:Message response = check agentClient->sendMessage(request);
 
 This proposal introduces the client half of A2A protocol support for
 Ballerina, covering all client-side spec operations across three transport
-bindings — each with its own concrete client type (`JsonRpcClient`,
+bindings - each with its own concrete client type (`JsonRpcClient`,
 `RestClient`, `GrpcClient`) implementing a shared `AgentClient` interface,
 plus a common `Client` that auto-detects and delegates to whichever one a
 resolved Agent Card prefers. It's an alternative to the architecture in
-[`a2a_support_for_ballerina.md`](./a2a_support_for_ballerina.md) — one
-`Client` type with internal per-call transport branching — proposed
+[`a2a_support_for_ballerina.md`](./a2a_support_for_ballerina.md) - one
+`Client` type with internal per-call transport branching - proposed
 side-by-side so the two can be weighed against each other before either
 is built. It establishes the types, transports, and error model a
 subsequent listener proposal will build on to complete A2A support for
