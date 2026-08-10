@@ -164,6 +164,10 @@ resolves the card first — a plain `new (url)` never skips straight to a
 fetch-free construction, since the card is what the constructor needs to
 detect protocol version, derive the URL, and resolve auth.
 
+```ballerina
+string? serviceUrl = ()
+```
+
 The optional `serviceUrl` parameter is the escape hatch for when the
 client genuinely needs to point at a URL other than the one the resolved
 card would derive — proxies, tests, or a card with several interfaces
