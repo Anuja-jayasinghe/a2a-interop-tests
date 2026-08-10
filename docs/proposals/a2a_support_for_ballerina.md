@@ -93,10 +93,10 @@ public isolated function resolveAgentCard(
 ```
 
 `resolveAgentCard(url, ...)` fetches and parses `/.well-known/agent-card.json`.
-Per spec §14.3, this well-known endpoint is public and unauthenticated by
+Per spec 14.3, this well-known endpoint is public and unauthenticated by
 design — `headers` above exists for signature/proxy use, not credentials.
 Authentication only applies to the separate, authenticated extended card
-(§3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
+(3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 
 > Signature verification is a separate, explicit step — `resolveAgentCard`
@@ -115,7 +115,7 @@ Authentication only applies to the separate, authenticated extended card
 > boolean|error valid = a2a:verifyAgentCardSignature(card, publicKey);
 > ```
 >
-> The spec mandates the *procedure* here, not a named API: §8.4.3 states
+> The spec mandates the *procedure* here, not a named API: 8.4.3 states
 > clients verifying Agent Card signatures **MUST** follow its six-step
 > canonicalize-and-verify sequence, and **SHOULD** verify at least one
 > signature before trusting a card — but it stops there, and neither
@@ -214,7 +214,7 @@ just the first matching entry — so the ordering of a card's
 errors if no entry matches the binding. If the selected interface declares a
 `tenant`, it's read automatically instead of requiring the caller to copy it
 by hand; an explicitly-passed `tenant` still wins. This matches the A2A
-spec's own client protocol-selection algorithm (§8.3.2: parse
+spec's own client protocol-selection algorithm (8.3.2: parse
 `supportedInterfaces`, select a supported transport, prefer earlier
 entries, use that entry's URL) — the spec itself is silent on
 constructor/factory API design, so that part is this proposal's own call.
@@ -339,7 +339,7 @@ public type TaskArtifactUpdateEvent record {|
 |};
 
 // Wrapper delivered by streaming operations; exactly one field is
-// non-nil per event (spec §3.2.3).
+// non-nil per event (spec 3.2.3).
 public type StreamResponse record {|
     Task? task?;
     Message? message?;
@@ -350,7 +350,7 @@ public type StreamResponse record {|
 
 // Wrapper returned by a unary sendMessage call — a narrower sibling of
 // StreamResponse, since a non-streaming reply can only ever be a Task or
-// a Message (spec §3.1.1).
+// a Message (spec 3.1.1).
 public type SendMessageResult record {|
     Task? task?;
     Message? message?;
