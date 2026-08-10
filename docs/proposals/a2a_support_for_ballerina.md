@@ -99,6 +99,16 @@ Authentication only applies to the separate, authenticated extended card
 (§3.1.11 `getExtendedAgentCard`, listed under Supported Operations below).
 `resolveAgentCardCached(url, ..., previous)` adds ETag-aware conditional GET.
 
+> **Pending lead approval — not yet confirmed.** Like the (removed)
+> `serviceUrl` override, `verifyAgentCardSignature` is this library going
+> beyond exactly what the spec requires: the spec mandates the six-step
+> verification *procedure* (§8.4.3) below, but not a named API for it,
+> and neither reference SDK ships an equivalent helper. Unlike
+> `serviceUrl`, this isn't being removed outright here — signature
+> verification has real security value and the case for keeping it looks
+> stronger — but whether to ship it as public API still needs the same
+> discussion and sign-off before this section is treated as settled.
+
 Signature verification is a separate, explicit step — `resolveAgentCard`
 does not call it automatically, since not every card is signed and the
 caller must supply the verifying key out-of-band:
