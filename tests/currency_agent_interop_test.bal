@@ -25,7 +25,7 @@ function testCurrencyAgentSendMessage() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_CURRENCY_AGENT_URL");
-    a2a:Client c = check a2a:newClient(baseUrl);
+    a2a:Client c = check new (baseUrl);
 
     a2a:Message msg = {
         messageId: "currency-interop-send-1",
@@ -48,7 +48,7 @@ function testCurrencyAgentSendMessageStream() returns error? {
     }
 
     string baseUrl = os:getEnv("A2A_CURRENCY_AGENT_URL");
-    a2a:Client c = check a2a:newClient(baseUrl, {timeout: 30});
+    a2a:Client c = check new (baseUrl, {timeout: 30});
 
     a2a:Message msg = {
         messageId: "currency-interop-stream-1",

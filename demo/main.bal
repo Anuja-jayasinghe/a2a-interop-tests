@@ -49,7 +49,7 @@ public function main() returns error? {
     // older v0.3 dialect (see ballerina/a2a's compat_v03.bal) and translate
     // transparently -- everything below this line is identical regardless
     // of which server is configured.
-    a2a:Client agentClient = check a2a:newClient(card, clientConfig = DEMO_CLIENT_CONFIG);
+    a2a:Client agentClient = check new (card, clientConfig = DEMO_CLIENT_CONFIG);
 
     io:println("=== Step 2: sendMessage ===");
     string firstText = "Say hello.";
