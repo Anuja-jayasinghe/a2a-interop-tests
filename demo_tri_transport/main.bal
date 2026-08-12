@@ -31,17 +31,26 @@ public function main() returns error? {
     io:println(string `  "${question}"`);
     io:println();
 
-    check askOverTransport(url, "GRPC", "gRPC     ", question);
-    check askOverTransport(url, "JSONRPC", "JSON-RPC ", question);
-    check askOverTransport(url, "HTTP+JSON", "REST     ", question);
+    // One client type per transport binding. Each is constructed directly,
+    // which bypasses the Agent Card's own preference ordering -- exactly
+    // what this demo wants, since the point is to exercise all three
+    // against the same agent rather than let the card pick one.
+    a2a:GrpcClient grpcClient = check new (url, clientConfig = DEMO_CLIENT_CONFIG);
+    a2a:JsonRpcClient jsonRpcClient = check new (url, clientConfig = DEMO_CLIENT_CONFIG);
+    a2a:RestClient restClient = check new (url, clientConfig = DEMO_CLIENT_CONFIG);
+
+    check askOverTransport(grpcClient, "gRPC     ", question);
+    check askOverTransport(jsonRpcClient, "JSON-RPC ", question);
+    check askOverTransport(restClient, "REST     ", question);
 
     io:println();
     io:println("Same client, same agent, same question -- three different wire protocols, all working.");
 }
 
-function askOverTransport(string url, a2a:TransportBinding binding, string label, string question) returns error? {
-    a2a:Client agentClient = check a2a:newClient(url, clientConfig = DEMO_CLIENT_CONFIG, binding = binding);
-
+// Takes the interface type, not a concrete class: the whole body below is
+// binding-agnostic, and this is what makes that literal rather than a
+// claim -- the same code drives all three transports.
+function askOverTransport(a2a:AgentClient agentClient, string label, string question) returns error? {
     a2a:Message msg = {
         messageId: uuid:createType4AsString(),
         role: a2a:ROLE_USER,

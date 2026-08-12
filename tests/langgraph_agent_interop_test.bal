@@ -32,7 +32,7 @@ function testLangGraphAgentSendMessage() returns error? {
         return;
     }
     string baseUrl = os:getEnv("A2A_LANGGRAPH_AGENT_URL");
-    a2a:Client c = check a2a:newClient(baseUrl, {timeout: 30});
+    a2a:Client c = check new (baseUrl, {timeout: 30});
 
     a2a:Message msg = {
         messageId: "langgraph-send-1",
@@ -55,7 +55,7 @@ function testLangGraphAgentInputRequiredThenMultiTurn() returns error? {
         return;
     }
     string baseUrl = os:getEnv("A2A_LANGGRAPH_AGENT_URL");
-    a2a:Client c = check a2a:newClient(baseUrl, {timeout: 30});
+    a2a:Client c = check new (baseUrl, {timeout: 30});
 
     // Deliberately omit the target currency so the agent must ask for it —
     // a genuine, model-driven INPUT_REQUIRED, not a scripted one.
@@ -92,7 +92,7 @@ function testLangGraphAgentGenuineInFlightCancel() returns error? {
         return;
     }
     string baseUrl = os:getEnv("A2A_LANGGRAPH_AGENT_URL");
-    a2a:Client c = check a2a:newClient(baseUrl, {timeout: 30});
+    a2a:Client c = check new (baseUrl, {timeout: 30});
 
     a2a:Message msg = {
         messageId: "langgraph-cancel-1",
@@ -125,7 +125,7 @@ function testLangGraphAgentGenuineInFlightSubscribe() returns error? {
         return;
     }
     string baseUrl = os:getEnv("A2A_LANGGRAPH_AGENT_URL");
-    a2a:Client c = check a2a:newClient(baseUrl, {timeout: 30});
+    a2a:Client c = check new (baseUrl, {timeout: 30});
 
     a2a:Message msg = {
         messageId: "langgraph-subscribe-1",
@@ -156,7 +156,7 @@ function testLangGraphAgentPushNotificationConfigCrud() returns error? {
     a2a:AgentCard card = check a2a:resolveAgentCard(baseUrl);
     test:assertTrue(card.capabilities.pushNotifications == true,
             "this agent must genuinely declare push notification support for this test to be meaningful");
-    a2a:Client c = check a2a:newClient(card, {timeout: 30});
+    a2a:Client c = check new (card, {timeout: 30});
 
     a2a:Message msg = {
         messageId: "langgraph-push-1",
