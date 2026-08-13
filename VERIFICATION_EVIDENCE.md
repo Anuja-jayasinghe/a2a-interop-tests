@@ -7,11 +7,30 @@ Python, one Java), with real Anthropic-backed responses where an LLM was
 involved. Captured in one sitting, all four reference servers running
 simultaneously with real credentials.
 
-**Run timestamp**: 2026-08-02, 18:42 local. Reproduce with the commands in
-each section, or see [`END_TO_END_RUNBOOK.md`](END_TO_END_RUNBOOK.md) for
-how to stand up all four servers from scratch first.
+**Original run timestamp**: 2026-08-02, 18:42 local. §1 below was
+re-captured live on **2026-08-13** against a materially different
+`ballerina/a2a` build — the transport-specific-client split, client-side
+capability gating (issue #11), and a `REST_OPERATIONS`/`GrpcStreamAdapter`
+file reorganization had all landed since the original capture and had
+never been run against a real agent before. §2-§7 are unchanged from the
+original 2026-08-02 capture and were not independently re-run this
+session; nothing found in the §1 re-verification suggests they'd behave
+differently, since none of the intervening changes touched the
+demo/tri-transport/tck code paths those sections exercise, but that's an
+inference, not fresh evidence. Reproduce with the commands in each
+section, or see [`END_TO_END_RUNBOOK.md`](END_TO_END_RUNBOOK.md) for how
+to stand up all four servers from scratch first.
 
 ## 1. Full automated suite — real credentials, all four agents running
+
+**Re-verified 2026-08-13.** First attempt failed on
+`testDiceAgentSendMessageStreamGrpc` — a genuine, previously-unknown
+`ballerina/a2a` bug (`normalizeGrpcSchemeUrl` didn't handle
+`dice_agent`'s scheme-less GRPC interface url), found, fixed, and
+re-verified live in the same session. Full story:
+[`servers/dice_agent/findings.md`](servers/dice_agent/findings.md) §11.
+The capture below is the clean re-run after that fix, on the same
+architecture described above:
 
 ```
 A2A_TEST_SERVER_URL=http://127.0.0.1:9999
@@ -45,17 +64,40 @@ bal test --sticky --groups interop
 15 passing
 1 failing
 0 skipped
-Test execution time : 59.923s
+Test execution time : 59.027s
 ```
 
-The one failure is not a client defect — it's `a2a-sdk==0.3.0`'s own
-response to `deleteTaskPushNotificationConfig` genuinely omitting both
-`result` and `error` from its JSON-RPC response, which `ballerina/a2a`
-correctly rejects rather than silently treating as success. Full wire
-evidence: [`servers/langgraph_agent/findings.md`](servers/langgraph_agent/findings.md)
+Identical result to the original 2026-08-02 capture — same count, same
+single expected failure. The one failure is not a client defect — it's
+`a2a-sdk==0.3.0`'s own response to `deleteTaskPushNotificationConfig`
+genuinely omitting both `result` and `error` from its JSON-RPC response,
+which `ballerina/a2a` correctly rejects rather than silently treating as
+success. Full wire evidence:
+[`servers/langgraph_agent/findings.md`](servers/langgraph_agent/findings.md)
 §5. The *create/get/list* half of the same operation family — the part
 that isn't blocked by that upstream bug — is proven working with real
 output in §3 below.
+
+### Client-side capability gating (issue #11), checked against every real card
+
+Not yet exercised live before this session. Real capability flags
+observed on each agent's actual card, and how the client's new gates
+behaved against them:
+
+| Agent | Real `capabilities` | Gate behavior confirmed |
+| :---- | :---- | :---- |
+| `helloworld` | `streaming: true` (no `pushNotifications` — genuinely unimplemented, confirmed by reading the sample's source, not just the card) | real streaming path taken, not the fallback; the absent `pushNotifications` capability was never called against, so no wasted round trip either way |
+| `adk_currency_agent` | `streaming: true` | real streaming path taken |
+| `langgraph` | `streaming: true`, `pushNotifications: true` | real streaming path taken; `testLangGraphAgentPushNotificationConfigCrud`'s create/get/list legs (the part not blocked by the upstream bug above) confirm the gate doesn't wrongly block a capability the card genuinely grants |
+| `dice_agent` | `streaming: true`, `pushNotifications: false`, `extendedAgentCard: false` | real streaming path taken; a card that explicitly denies two capabilities, closest real-world case to the gate's actual purpose |
+
+None of the four live cards happen to under-declare `streaming` (all say
+`true`), so the specific risk flagged when this feature shipped — a card
+saying `false` for a capability the server actually supports, causing the
+client to silently degrade to unary send when real streaming would have
+worked — still has no live counter-example either way. What this session
+does confirm: the gate never misfires against a real, accurately-declared
+card, on any of the four independently-built agents.
 
 ## 2. Real conversations — live, typed, not scripted
 
