@@ -390,3 +390,53 @@ expected `a2a-sdk==0.3.0` non-conformance on delete
 `FINDINGS.md`'s REST and gRPC coverage-gap sections for real: both
 bindings now have genuine, passing, real-server (not mock) coverage,
 matching every other transport/operation already proven in this repo.
+
+## 11. `dice_agent`'s GRPC interface url has no scheme at all — a real `ballerina/a2a` client bug this exposed, now fixed
+
+Re-run 2026-08-13, against a `ballerina/a2a` build carrying the
+transport-specific-client split, client-side capability gating (issue
+#11), and a `REST_OPERATIONS`/`GrpcStreamAdapter` file reorganization —
+none of that architecture had been proven against a real agent before
+this session.
+
+`testDiceAgentSendMessageStreamGrpc` failed on the first attempt:
+
+```
+error {ballerina/grpc:1}InternalError&{ballerina/grpc:1}Error ("Malformed URL: localhost:11000")
+    at GrpcClient.init (grpc_client.bal:99)
+```
+
+`dice_agent`'s real card publishes its `GRPC` interface as bare
+`"localhost:11000"` — no `grpc://`/`http://` prefix at all, following
+gRPC's own target-string convention (`grpc.Dial("host:port")`), unlike
+every other binding's URL. `ballerina/a2a`'s `normalizeGrpcSchemeUrl`
+only ever rewrote an explicit `grpc://`/`grpcs://` prefix and otherwise
+passed the url through unchanged, on the assumption that "unchanged"
+meant "already a valid http(s) URL." No mock fixture in `ballerina/a2a`'s
+own test suite ever exercised this, because every one of them supplies
+the GRPC mock's url with an explicit `http://` prefix already — a case
+of the mocks encoding the library's own assumptions about card shape
+rather than a real server's. This is precisely the class of gap live
+testing exists to catch.
+
+Fixed in `ballerina/a2a` (`client.bal`, `normalizeGrpcSchemeUrl`):
+a bare `host:port` now defaults to `http://`, the same as an explicit
+`grpc://` already resolves to — absence of a scheme carries no TLS
+signal either way. Unit-tested, then re-packed/pushed and re-verified
+live:
+
+```
+[pass] testDiceAgentSendMessageStreamGrpc
+1 passing
+0 failing
+```
+
+A clean full-suite re-run afterward reproduced the exact `15 passing, 1
+failing` baseline from §10 above — same single expected failure, nothing
+else regressed by the intervening architecture changes. One transient,
+non-reproducing failure was observed on `testCurrencyAgentSendMessageStream`
+during a run with all four agents under concurrent load (the stream's
+event sequence was independently confirmed correct via a one-off
+diagnostic capture, and the same test then passed both in isolation and
+on the clean re-run) — logged here as an observation, not a confirmed
+defect in either the client or `adk_currency_agent`.
