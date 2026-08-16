@@ -1,3 +1,4 @@
+import ballerina/a2a;
 import ballerina/http;
 import ballerina/os;
 
@@ -66,4 +67,156 @@ isolated function callClaude(string prompt, int maxTokens = 1024) returns string
     map<json> firstBlock = check contentBlocks[0].ensureType();
     string text = check firstBlock["text"].ensureType();
     return text;
+}
+
+# Strips any leading/trailing prose or Markdown code fences around a JSON
+# object and returns just the outermost `{...}` slice, since models
+# sometimes wrap a requested strict-JSON answer in explanation text.
+#
+# + text - raw model output expected to contain one JSON object
+# + return - the outermost `{...}` substring, or an error if none is found
+isolated function extractJsonObject(string text) returns string|error {
+    int? startIdx = text.indexOf("{");
+    int? endIdx = text.lastIndexOf("}");
+    if startIdx is () || endIdx is () || endIdx < startIdx {
+        return error("no JSON object found in model output: " + text);
+    }
+    return text.substring(startIdx, endIdx + 1);
+}
+
+# Best-effort JSON-object parse: strips prose/fences around the outermost
+# `{...}` (via `extractJsonObject`), then parses it. Returns () rather than
+# an error on any failure, so callers can fall back to a safe default per
+# DEMO_AGENT_PLAN.md §6.8 instead of a parse failure crashing the demo.
+#
+# + text - raw model output expected to contain one JSON object
+# + return - the parsed object, or () if it couldn't be parsed
+isolated function parseJsonObject(string text) returns map<json>? {
+    string|error jsonText = extractJsonObject(text);
+    if jsonText is error {
+        return ();
+    }
+    json|error parsed = jsonText.fromJsonString();
+    if parsed is error {
+        return ();
+    }
+    map<json>|error parsedMap = parsed.ensureType();
+    if parsedMap is error {
+        return ();
+    }
+    return parsedMap;
+}
+
+# Self-assessment: can the local agent answer a question from general
+# knowledge, or does it need a live/tool-backed capability?
+#
+# + canAnswerLocally - true if no delegation is needed
+# + reason - the model's stated reason, one short sentence
+public type SelfAssessment record {|
+    boolean canAnswerLocally;
+    string reason;
+|};
+
+# Agent-selection result: which discovered candidate (if any) should
+# handle the question.
+#
+# + chosenBaseUrl - the chosen candidate's base URL, or () if none fit
+# + skillId - the skill id that justified the choice, if any was chosen
+# + reason - the model's stated reason, one short sentence
+public type AgentSelection record {|
+    string? chosenBaseUrl;
+    string? skillId;
+    string reason;
+|};
+
+# Claude call #1 (self-assess, DEMO_AGENT_PLAN.md §6.8): decide whether the
+# question needs a live/tool-backed capability or can be answered from
+# general knowledge. Falls back to "cannot answer locally" -- the safe
+# default, since it only costs an extra discovery round rather than risking
+# a fabricated answer -- if the model's reply can't be parsed as the
+# requested strict JSON.
+#
+# + question - the user's question
+# + return - the assessment, or an error only on a transport/auth failure
+isolated function selfAssess(string question) returns SelfAssessment|error {
+    string prompt = string `You are the reasoning layer of a client-side A2A agent. Decide whether you can answer the question below purely from your own general knowledge, or whether it needs a live/tool-backed capability that you cannot genuinely provide yourself: real-time or external-world data, an action in the world, genuine randomness, or an exact numeric computation/verification (arithmetic, primality, precise counting) whose correctness you can't guarantee from reasoning alone and that a real tool would verify deterministically. Prefer delegating exact computations and anything random to a tool rather than estimating them yourself, even if you could produce a plausible-looking answer -- a real client-side agent shouldn't pass off an unverified guess as a verified result. Reserve "can answer locally" for genuine general-knowledge questions (facts, definitions, explanations) with no verification step involved.
+
+Question: ${question}
+
+Respond with ONLY a strict JSON object, no prose, no code fences:
+{"canAnswerLocally": true|false, "reason": "<one short sentence>"}`;
+
+    string reply = check callClaude(prompt, 256);
+
+    map<json>? parsedMap = parseJsonObject(reply);
+    if parsedMap is () {
+        return {canAnswerLocally: false, reason: "could not parse self-assessment response; defaulting to needs-delegation"};
+    }
+
+    boolean canAnswerLocally = parsedMap["canAnswerLocally"] is boolean ? <boolean>parsedMap["canAnswerLocally"] : false;
+    string reason = parsedMap["reason"] is string ? <string>parsedMap["reason"] : "(no reason given)";
+    return {canAnswerLocally, reason};
+}
+
+# Claude call #2 (select, DEMO_AGENT_PLAN.md §6.8): given the discovered
+# catalog's real card/skill data, choose which agent (if any) should
+# handle the question -- matching declared skills, never inventing
+# capabilities. Falls back to "no suitable agent" (never a fabricated
+# match) if the model's reply can't be parsed as the requested strict
+# JSON, or if it names an agent that wasn't actually discovered.
+#
+# + question - the user's question
+# + candidates - the discovered agents to choose among
+# + return - the selection, or an error only on a transport/auth failure
+isolated function selectAgent(string question, DiscoveredAgent[] candidates) returns AgentSelection|error {
+    if candidates.length() == 0 {
+        return {chosenBaseUrl: (), skillId: (), reason: "no agents were discovered"};
+    }
+
+    string catalog = "";
+    foreach DiscoveredAgent candidate in candidates {
+        catalog += string `- Agent "${candidate.card.name}" at ${candidate.baseUrl}: ${candidate.card.description}` + "\n";
+        foreach a2a:AgentSkill skill in candidate.card.skills {
+            catalog += string `    skill id="${skill.id}" name="${skill.name}" tags=${skill.tags.toString()}: ${skill.description}` + "\n";
+        }
+    }
+
+    string prompt = string `You are the reasoning layer of a client-side A2A agent. You cannot answer the question below yourself; you must delegate it to one of the agents discovered below, chosen ONLY by matching the question to their declared skills. Do not invent capabilities an agent doesn't declare. If none of them genuinely fit, say so honestly.
+
+Question: ${question}
+
+Discovered agents:
+${catalog}
+Respond with ONLY a strict JSON object, no prose, no code fences:
+{"chosenAgent": "<baseUrl>|none", "skillId": "<the matching skill id, or empty if none>", "reason": "<one short sentence>"}`;
+
+    string reply = check callClaude(prompt, 300);
+
+    map<json>? parsedMap = parseJsonObject(reply);
+    if parsedMap is () {
+        return {chosenBaseUrl: (), skillId: (), reason: "could not parse selection response; defaulting to no suitable agent"};
+    }
+
+    string chosen = parsedMap["chosenAgent"] is string ? <string>parsedMap["chosenAgent"] : "none";
+    string skillId = parsedMap["skillId"] is string ? <string>parsedMap["skillId"] : "";
+    string reason = parsedMap["reason"] is string ? <string>parsedMap["reason"] : "(no reason given)";
+
+    if chosen == "none" || chosen == "" {
+        return {chosenBaseUrl: (), skillId: (), reason};
+    }
+
+    // Guard against a hallucinated base URL: only accept a choice that
+    // matches one of the actually-discovered candidates.
+    boolean matches = false;
+    foreach DiscoveredAgent candidate in candidates {
+        if candidate.baseUrl == chosen {
+            matches = true;
+            break;
+        }
+    }
+    if !matches {
+        return {chosenBaseUrl: (), skillId: (), reason: "model chose an unrecognized agent (" + chosen + "); defaulting to no suitable agent"};
+    }
+
+    return {chosenBaseUrl: chosen, skillId: skillId == "" ? () : skillId, reason};
 }
