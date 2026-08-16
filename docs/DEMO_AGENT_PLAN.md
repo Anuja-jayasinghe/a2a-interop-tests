@@ -623,7 +623,120 @@ before reworking it wholesale.
 
 ---
 
-## 9. Definition of done
+## 9. Post-implementation: docs pass and full repo cleanup, both repos
+
+**Do this only after the demo works end to end (§9 checklist green).**
+It's the last phase of this plan, not a parallel task — cleaning up
+while the design is still moving just creates more to redo.
+
+### 9.1 Docs pass
+
+Re-run the grep from §8 — it will now also catch anything the
+implementation itself added:
+
+```bash
+cd "C:\gitProject\a2a-interop-tests"
+grep -rln "cd demo\b" --include=*.md . | grep -v "cd demo_agent"
+```
+
+Update every hit so `demo/` and `demo_agent/` are both represented
+wherever a reader would reasonably look for "how do I run the demo,"
+per the distinction in §8. Don't just add a mention — check the
+surrounding prose still makes sense with two demos instead of one (e.g.
+`DEMO_GUIDE.md`'s intro paragraph, `REPO_MAP.md`'s repo diagram/prose).
+
+### 9.2 Archive or delete deprecated docs — named candidates
+
+These are real, already-identified as of 2026-08-16 — verify each is
+still true before acting, since time will have passed:
+
+**`a2a-interop-tests` (this repo):**
+- `TEMP_ballerina_vs_python_sdk.md` and `TEMP_walkthrough_client_and_demo.md`
+  at the repo root — both untracked, both self-labeled temporary
+  (`TEMP_walkthrough_client_and_demo.md` literally says *"Delete it when
+  you're done reading. Generated 2026-08-05."*). If their content isn't
+  needed, `rm` them (they're untracked — nothing to revert). If something
+  in them is worth keeping, fold it into a real doc first, then delete.
+- Any doc whose content is now superseded by `demo_agent/`'s own README
+  or by this plan having been executed — check `DEMO_PRESENTATION_SCRIPT.md`
+  in particular once you know whether it got the `demo_agent/` rewrite
+  mentioned in §8.
+- Re-check for other `TEMP_*`/`*_OLD*`/`*_DRAFT*`-style files that may
+  have accumulated since — `find . -maxdepth 2 -iname "TEMP*"` etc.
+
+**`a2a-ballerina`:** no deprecated docs found as of this writing (its
+`docs/API_PROVENANCE.md`, `docs/A2A_Technical_Design.md` are live and
+current). Re-check rather than assume that's still true.
+
+Prefer **delete** over **archive** for anything genuinely superseded and
+still reachable in git history — an `archive/` folder that nobody
+revisits is just deferred deletion with extra steps. Only keep something
+findable outside git history if there's a real reason a future reader
+would look for it by browsing the repo rather than `git log`.
+
+### 9.3 Repo and branch cleanup — both repos
+
+**`a2a-ballerina`:** as of 2026-08-16, these local branches are fully
+merged into `main` (`git branch --merged main` confirms) — safe to
+delete, both local and their `origin/*` counterparts, once you've
+independently re-verified they're merged (branches move; re-check, don't
+trust this list blindly):
+`docs/api-provenance`, `docs/transport-specific-clients`,
+`feature/client-delegator`, `feature/grpc-client`,
+`feature/jsonrpc-client`, `feature/rest-client`,
+`fix/robust-binding-selection`, `fix/v10-security-scheme-oneof`,
+`refactor/demote-internal-helpers`, `refactor/extract-operation-logic`,
+`refactor/merge-constructor`, `refactor/remove-non-spec-public-api`,
+`refactor/spec-aligned-interface-selection`,
+`refactor/unexport-internal-modules`, `test/whole-client-integration`.
+
+```bash
+cd "C:\gitProject\A2A_Project\a2a-ballerina"
+git branch -d <name>              # local, once merge is re-confirmed
+git push origin --delete <name>   # remote — ask before doing this part,
+                                   # it's a shared-visibility action
+```
+
+**`a2a-interop-tests`:** local branch `ci/interop-tests-workflow` is
+**NOT a cleanup candidate** — it backs an **open PR (#13, opened
+2026-08-02, "ci: build demo and tests packages against a2a-ballerina's
+main on every push/PR")** that has been sitting unmerged for two weeks
+as of this writing. Don't delete it or its branch. Flag it back to the
+user as a real, still-open loose end needing a decision (merge, update,
+or close) — it is out of scope for this plan to resolve unilaterally,
+since it's unrelated CI work, not part of the demo_agent effort.
+
+For both repos, also check and report (don't act on these without
+asking — they're either destructive or ambiguous):
+- Any other local branches with no matching PR, open or merged (rename
+  drift, abandoned spikes)
+- Stray build artifacts *not* already covered by `.gitignore`
+  (`target/` in both repos is already ignored — verify new dirs like
+  `demo_agent/target/` are covered by the same ignore pattern, not by
+  their own literal entry)
+- Any `.env`-shaped file that isn't already git-ignored (a real secret
+  leak risk, not just tidiness — treat any hit here as urgent)
+
+### 9.4 What "done" means for this phase
+
+- [ ] Docs grep from §9.1 returns clean
+- [ ] Both TEMP_*.md files resolved (deleted or folded in) — confirmed
+      with the user first if anything in them seemed worth preserving
+- [ ] Merged local branches in `a2a-ballerina` deleted (local at least;
+      remote deletion only with explicit go-ahead)
+- [ ] PR #13 in `a2a-interop-tests` reported to the user as still open —
+      not touched
+- [ ] No stray `.env`/secret-shaped files outside `.gitignore` in either
+      repo
+- [ ] Final `git status --short` on both repos is clean (or only shows
+      intentional, explained state)
+
+---
+
+## 10. Definition of done (implementation phase)
+
+This is the gate for "the demo works." §9's docs-pass and cleanup is a
+separate, later checklist (§9.4) — do this one first.
 
 - [ ] Both commands work: `bal run --sticky` and `bal run --sticky -- scripted`
 - [ ] Scenario 1 answers locally with **no** delegation
@@ -652,7 +765,7 @@ before reworking it wholesale.
 
 ---
 
-## 10. Repo conventions
+## 11. Repo conventions
 
 From `a2a-ballerina/CLAUDE.md` and this repo's history — they apply here:
 
