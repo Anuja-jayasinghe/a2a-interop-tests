@@ -1,14 +1,12 @@
 import ballerina/io;
 
-// Build order step 3 (DEMO_AGENT_PLAN.md §7): selection, verified against
-// scenarios 1-5 from §6.6 before delegation is wired on top.
+// Build order step 4 (DEMO_AGENT_PLAN.md §7): delegation (streaming),
+// verified against scenarios 2-4 from §6.6.
 public function main() returns error? {
     string[] scenarios = [
-        "What is the capital of France?",
         "Is 97 a prime number?",
         "Roll a 20-sided die.",
-        "What is 100 USD in EUR?",
-        "Book me a flight to Tokyo."
+        "What is 100 USD in EUR?"
     ];
 
     foreach string question in scenarios {
@@ -27,12 +25,28 @@ public function main() returns error? {
 
         io:println("=== [3] SELECT ===");
         AgentSelection selection = check selectAgent(question, discovered);
-        string? chosen = selection.chosenBaseUrl;
-        if chosen is string {
-            io:println("  -> chose ", chosen, " skill=", selection.skillId ?: "?", " reason=", selection.reason);
-        } else {
+        string? chosenUrl = selection.chosenBaseUrl;
+        if chosenUrl is () {
             io:println("  -> no suitable agent: ", selection.reason);
+            continue;
         }
+        io:println("  -> chose ", chosenUrl, " skill=", selection.skillId ?: "?", " reason=", selection.reason);
+
+        DiscoveredAgent? chosenAgent = ();
+        foreach DiscoveredAgent candidate in discovered {
+            if candidate.baseUrl == chosenUrl {
+                chosenAgent = candidate;
+                break;
+            }
+        }
+        if chosenAgent is () {
+            io:println("  -> internal error: chosen agent not found among discovered candidates");
+            continue;
+        }
+
+        DelegationResult result = check delegate(chosenAgent.card, question);
+        io:println("  reply text: ", result.replyText);
+        io:println("  final state: ", result.state ?: "(none)");
         io:println();
     }
 }
