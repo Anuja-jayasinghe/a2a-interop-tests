@@ -16,3 +16,6 @@ CLAUDE.md
 # Real secrets for local agent servers (e.g. servers/adk_currency_agent/.env).
 # Never commit an actual API key -- only .env.example templates are tracked.
 .env
+
+# Local git worktrees used for isolated feature work.
+.worktrees/
