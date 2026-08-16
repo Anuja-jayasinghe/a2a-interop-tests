@@ -8,20 +8,34 @@ involved. Captured in one sitting, all four reference servers running
 simultaneously with real credentials.
 
 **Original run timestamp**: 2026-08-02, 18:42 local. §1 below was
-re-captured live on **2026-08-13** against a materially different
-`ballerina/a2a` build — the transport-specific-client split, client-side
-capability gating (issue #11), and a `REST_OPERATIONS`/`GrpcStreamAdapter`
-file reorganization had all landed since the original capture and had
-never been run against a real agent before. §2-§7 are unchanged from the
-original 2026-08-02 capture and were not independently re-run this
-session; nothing found in the §1 re-verification suggests they'd behave
-differently, since none of the intervening changes touched the
-demo/tri-transport/tck code paths those sections exercise, but that's an
-inference, not fresh evidence. Reproduce with the commands in each
-section, or see [`END_TO_END_RUNBOOK.md`](END_TO_END_RUNBOOK.md) for how
-to stand up all four servers from scratch first.
+re-captured live on **2026-08-13**, then again on **2026-08-16** against
+`ballerina/a2a` after the spec-first release-gap closure (PR #36 in
+`a2a-ballerina`: AgentCard signature verification per §8.4, AgentCard
+caching per §8.6.2, gRPC auth parity per §7.3, legacy
+`supportsAuthenticatedExtendedCard` mapping, gRPC error-code
+consistency, plus mutation-testing infrastructure) — none of that work
+had been run against a real agent before the 2026-08-16 capture, only
+against the mock server and a genuinely-external but offline signature
+fixture. §2-§7 are unchanged from the original 2026-08-02 capture and
+were not independently re-run this session; nothing found in the §1
+re-verification suggests they'd behave differently, since none of the
+intervening changes touched the demo/tri-transport/tck code paths those
+sections exercise, but that's an inference, not fresh evidence.
+Reproduce with the commands in each section, or see
+[`END_TO_END_RUNBOOK.md`](END_TO_END_RUNBOOK.md) for how to stand up
+all four servers from scratch first.
 
 ## 1. Full automated suite — real credentials, all four agents running
+
+**Re-verified 2026-08-16**, after the spec-first release-gap closure
+(PR #36: AgentCard signing/caching, gRPC auth parity, legacy
+extended-card mapping, gRPC error-code consistency). Identical result to
+both the 2026-08-13 and original 2026-08-02 captures — same 15/16, same
+single expected failure, same error text. No regression from any of that
+work. One infrastructure snag along the way, unrelated to
+`ballerina/a2a`: `dice_agent`'s Quarkus dev-mode process hung on its
+interactive analytics opt-in prompt (`y/n`) with no terminal attached;
+restarting with the prompt pre-answered via stdin resolved it.
 
 **Re-verified 2026-08-13.** First attempt failed on
 `testDiceAgentSendMessageStreamGrpc` — a genuine, previously-unknown
@@ -67,7 +81,17 @@ bal test --sticky --groups interop
 Test execution time : 59.027s
 ```
 
-Identical result to the original 2026-08-02 capture — same count, same
+Re-run again on **2026-08-16** after the spec-first release-gap closure
+(PR #36), same command, same four agents:
+
+```
+15 passing
+1 failing
+0 skipped
+Test execution time : 55.365s
+```
+
+Identical pass/fail set both times, and identical to the original 2026-08-02 capture — same count, same
 single expected failure. The one failure is not a client defect — it's
 `a2a-sdk==0.3.0`'s own response to `deleteTaskPushNotificationConfig`
 genuinely omitting both `result` and `error` from its JSON-RPC response,
