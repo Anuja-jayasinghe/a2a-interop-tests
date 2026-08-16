@@ -111,9 +111,14 @@ isolated function parseJsonObject(string text) returns map<json>? {
 # knowledge, or does it need a live/tool-backed capability?
 #
 # + canAnswerLocally - true if no delegation is needed
+# + answer - the answer itself, present only when `canAnswerLocally` is
+#            true (asked for in the same call rather than a separate one,
+#            to keep this design's Claude calls at four total -- see
+#            DEMO_AGENT_PLAN.md §6.8)
 # + reason - the model's stated reason, one short sentence
 public type SelfAssessment record {|
     boolean canAnswerLocally;
+    string? answer;
     string reason;
 |};
 
@@ -143,19 +148,25 @@ isolated function selfAssess(string question) returns SelfAssessment|error {
 
 Question: ${question}
 
-Respond with ONLY a strict JSON object, no prose, no code fences:
-{"canAnswerLocally": true|false, "reason": "<one short sentence>"}`;
+If, and only if, you can answer locally, also give the answer itself in the same response -- one or two natural sentences.
 
-    string reply = check callClaude(prompt, 256);
+Respond with ONLY a strict JSON object, no prose, no code fences:
+{"canAnswerLocally": true|false, "answer": "<your answer, only if canAnswerLocally is true; otherwise empty string>", "reason": "<one short sentence>"}`;
+
+    string reply = check callClaude(prompt, 512);
 
     map<json>? parsedMap = parseJsonObject(reply);
     if parsedMap is () {
-        return {canAnswerLocally: false, reason: "could not parse self-assessment response; defaulting to needs-delegation"};
+        return {canAnswerLocally: false, answer: (), reason: "could not parse self-assessment response; defaulting to needs-delegation"};
     }
 
     boolean canAnswerLocally = parsedMap["canAnswerLocally"] is boolean ? <boolean>parsedMap["canAnswerLocally"] : false;
     string reason = parsedMap["reason"] is string ? <string>parsedMap["reason"] : "(no reason given)";
-    return {canAnswerLocally, reason};
+    string? answer = ();
+    if canAnswerLocally && parsedMap["answer"] is string && <string>parsedMap["answer"] != "" {
+        answer = <string>parsedMap["answer"];
+    }
+    return {canAnswerLocally, answer, reason};
 }
 
 # Claude call #2 (select, DEMO_AGENT_PLAN.md §6.8): given the discovered
