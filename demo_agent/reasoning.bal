@@ -61,12 +61,23 @@ isolated function callClaude(string prompt, int maxTokens = 1024) returns string
     }
 
     json[] contentBlocks = check responseMap["content"].ensureType();
-    if contentBlocks.length() == 0 {
-        return error("Anthropic response had no content blocks: " + responseJson.toJsonString());
+    // Content blocks aren't always just one text block at index 0 -- a
+    // "thinking" block (extended thinking) can precede it, with no "text"
+    // field of its own. Find the first genuine text block instead of
+    // assuming position.
+    foreach json block in contentBlocks {
+        map<json>|error blockMap = block.ensureType();
+        if blockMap is error {
+            continue;
+        }
+        if blockMap["type"] == "text" {
+            string|error text = blockMap["text"].ensureType();
+            if text is string {
+                return text;
+            }
+        }
     }
-    map<json> firstBlock = check contentBlocks[0].ensureType();
-    string text = check firstBlock["text"].ensureType();
-    return text;
+    return error("Anthropic response had no text content block: " + responseJson.toJsonString());
 }
 
 # Strips any leading/trailing prose or Markdown code fences around a JSON
@@ -144,7 +155,7 @@ public type AgentSelection record {|
 # + question - the user's question
 # + return - the assessment, or an error only on a transport/auth failure
 isolated function selfAssess(string question) returns SelfAssessment|error {
-    string prompt = string `You are the reasoning layer of a client-side A2A agent. Decide whether you can answer the question below purely from your own general knowledge, or whether it needs a live/tool-backed capability that you cannot genuinely provide yourself: real-time or external-world data, an action in the world, genuine randomness, or an exact numeric computation/verification (arithmetic, primality, precise counting) whose correctness you can't guarantee from reasoning alone and that a real tool would verify deterministically. Prefer delegating exact computations and anything random to a tool rather than estimating them yourself, even if you could produce a plausible-looking answer -- a real client-side agent shouldn't pass off an unverified guess as a verified result. Reserve "can answer locally" for genuine general-knowledge questions (facts, definitions, explanations) with no verification step involved.
+    string prompt = string `You are the reasoning layer of a client-side A2A agent. Decide whether you can answer the question below purely from your own general knowledge, or whether it needs a live/tool-backed capability that you cannot genuinely provide yourself: real-time or external-world data, an action in the world, genuine randomness, or ANY exact numeric computation or verification -- including primality checks, arithmetic, precise counting, no matter how small or seemingly trivial the numbers are. Always treat "is N prime?", "compute X", "how many..." style questions as needing tool-backed verification, even when you're confident you could mentally work out the right answer -- a real client-side agent delegates verifiable computation to a tool rather than passing off its own unverified reasoning as a checked result. Reserve "can answer locally" strictly for genuine general-knowledge questions with no computation or verification step at all (facts, definitions, explanations, opinions).
 
 Question: ${question}
 
@@ -252,4 +263,42 @@ Remote agent's reply: ${remoteReplyText}
 Respond with ONLY the synthesized answer text -- no prose about what you're doing, no surrounding quotation marks.`;
 
     return callClaude(prompt, 300);
+}
+
+# Claude call #4 (answer clarification, scripted mode only,
+# DEMO_AGENT_PLAN.md §6.5): infer the missing detail from the original
+# question plus the remote agent's clarification text, since no user is
+# available to answer it themselves in scripted mode. Never fabricates --
+# returns an error if the original question doesn't genuinely contain
+# enough information to infer an answer, so the caller can abort that
+# scenario cleanly instead of guessing.
+#
+# + originalQuestion - the user's original question
+# + clarificationText - the remote agent's clarification request
+# + return - the inferred reply text, or an error if none can be inferred
+#            (including a transport/auth failure)
+isolated function answerClarificationAsScripted(string originalQuestion, string clarificationText) returns string|error {
+    string prompt = string `You are the reasoning layer of a client-side A2A agent running unattended -- no user is available to answer follow-up questions. A remote agent you delegated to has asked a clarifying question. Infer the missing detail from the original question alone, if it is genuinely present there (e.g. "What is 100 USD in EUR?" implies "to euros" for a "which currency?" clarification). Do not guess if the original question truly doesn't contain the answer.
+
+Original question: ${originalQuestion}
+Remote agent's clarification request: ${clarificationText}
+
+Respond with ONLY a strict JSON object, no prose, no code fences:
+{"canInfer": true|false, "reply": "<the inferred reply to send back, only if canInfer is true>"}`;
+
+    string reply = check callClaude(prompt, 256);
+
+    map<json>? parsedMap = parseJsonObject(reply);
+    if parsedMap is () {
+        return error("could not parse clarification-answer response");
+    }
+    boolean canInfer = parsedMap["canInfer"] is boolean ? <boolean>parsedMap["canInfer"] : false;
+    if !canInfer {
+        return error("could not infer the missing detail from the original question");
+    }
+    string? replyText = parsedMap["reply"] is string ? <string>parsedMap["reply"] : ();
+    if replyText is () || replyText == "" {
+        return error("model said it could infer a reply but gave none");
+    }
+    return replyText;
 }
