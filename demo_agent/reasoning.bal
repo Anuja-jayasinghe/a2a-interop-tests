@@ -220,3 +220,25 @@ Respond with ONLY a strict JSON object, no prose, no code fences:
 
     return {chosenBaseUrl: chosen, skillId: skillId == "" ? () : skillId, reason};
 }
+
+# Claude call #3 (synthesize, DEMO_AGENT_PLAN.md §6.7/§6.8): the local
+# agent's own phrasing of the remote agent's verbatim reply, presented
+# alongside that reply (never in place of it) so a viewer can see exactly
+# what A2A delivered versus what the local model did with it. Explicitly
+# instructed to preserve exact values -- numbers, rates, results -- rather
+# than recompute or embellish them; this reduces, but doesn't eliminate,
+# the distortion the side-by-side presentation exists to expose.
+#
+# + question - the original question
+# + remoteReplyText - the remote agent's verbatim reply text
+# + return - the synthesized answer, or an error on a transport/auth failure
+isolated function synthesizeAnswer(string question, string remoteReplyText) returns string|error {
+    string prompt = string `You are the reasoning layer of a client-side A2A agent, presenting an answer you obtained by delegating to another agent. Rephrase the remote agent's reply below as your own answer to the original question, in one or two natural sentences. Preserve every exact value from the reply -- numbers, rates, names, results -- verbatim; do not recompute, round differently, or embellish them. Do not add information the remote reply didn't provide.
+
+Original question: ${question}
+Remote agent's reply: ${remoteReplyText}
+
+Respond with ONLY the synthesized answer text -- no prose about what you're doing, no surrounding quotation marks.`;
+
+    return callClaude(prompt, 300);
+}
