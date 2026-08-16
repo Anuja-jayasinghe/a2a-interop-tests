@@ -7,6 +7,10 @@ import ballerina/io;
 # Clarification requests (scenario 6) are answered by Claude inferring the
 # missing detail from the original question (§6.5's scripted path), since
 # no user is available to answer them.
+#
+# + return - an error only on a transport/auth failure; individual
+#            scenario failures are printed, not raised, so one scenario
+#            failing doesn't abort the rest of the run
 function runScripted() returns error? {
     string[] scenarios = [
         "What is the capital of France?", // 1: self-answer, no delegation
