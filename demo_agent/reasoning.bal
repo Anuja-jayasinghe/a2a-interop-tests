@@ -15,12 +15,11 @@ const string ANTHROPIC_VERSION = "2023-06-01";
 
 final http:Client anthropicClient = check new (ANTHROPIC_API_BASE);
 
-// Fixed sibling-checkout location of the .env this whole repo already
-// documents (DEMO_AGENT_PLAN.md §2) -- kept outside every git repo on
-// purpose, so this reads it directly rather than copying the key into
-// tracked source. Absolute, not relative, so this doesn't break depending
-// on which directory `bal run` was launched from.
-const string FALLBACK_ENV_FILE = "C:\\gitProject\\A2A_Project\\.env";
+// Fixed location of this repo's own .env (git-ignored -- see .gitignore's
+// bare `.env` pattern), so this reads it directly rather than copying the
+// key into tracked source. Absolute, not relative, so this doesn't break
+// depending on which directory `bal run` was launched from.
+const string FALLBACK_ENV_FILE = "C:\\gitProject\\a2a-interop-tests\\.env";
 
 # Reads the Anthropic API key from the environment, falling back to
 # reading it directly out of `FALLBACK_ENV_FILE` if the shell running

@@ -11,7 +11,7 @@ already published there (or you've since changed `a2a-ballerina/a2a` and
 want the demo to pick up the change), rebuild and republish it first:
 
 ```bash
-cd ../../A2A_Project/a2a-ballerina/a2a
+cd ../../a2a-ballerina/a2a
 bal pack
 bal push --repository=local
 ```

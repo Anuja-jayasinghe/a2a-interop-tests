@@ -52,21 +52,28 @@ updates.
 
 ## 2. Where everything lives
 
-Three sibling checkouts. **None is nested inside another.** Note the
-split parent directories — this trips people up:
+Three sibling checkouts. **None is nested inside another.**
+
+> **Historical note:** when this plan was originally written, `a2a-ballerina`
+> sat nested inside a cluttered `A2A_Project` folder that also held every
+> reference/scratch resource, which was its own source of confusion ("split
+> parent directories"). That's been cleaned up since: `a2a-ballerina` is now
+> a proper top-level sibling, `a2a-samples`/`a2a-tck`/toolchain live under
+> `a2a-resources`, and `.env` moved into this repo's own root (still
+> git-ignored, never tracked). The table below reflects the current layout.
 
 | What | Absolute path |
 | :--- | :--- |
-| The library (`ballerina/a2a`) | `C:\gitProject\A2A_Project\a2a-ballerina\a2a` |
-| Upstream reference agents | `C:\gitProject\A2A_Project\a2a-samples` |
+| The library (`ballerina/a2a`) | `C:\gitProject\a2a-ballerina\a2a` |
+| Upstream reference agents | `C:\gitProject\a2a-resources\a2a-samples` |
 | **This repo** (`a2a-interop-tests`) | `C:\gitProject\a2a-interop-tests` |
-| Pinned A2A spec v1.0.0 | `C:\gitProject\A2A_Project\a2a-tck\specification\specification.md` |
-| Authoritative proto | `C:\gitProject\A2A_Project\a2a-tck\specification\a2a.proto` |
-| Anthropic API key | `C:\gitProject\A2A_Project\.env` (`ANTHROPIC_API_KEY=...`) |
+| Pinned A2A spec v1.0.0 | `C:\gitProject\a2a-resources\a2a-tck\specification\specification.md` |
+| Authoritative proto | `C:\gitProject\a2a-resources\a2a-tck\specification\a2a.proto` |
+| Anthropic API key | `C:\gitProject\a2a-interop-tests\.env` (`ANTHROPIC_API_KEY=...`) |
 
-`a2a-interop-tests` is at `C:\gitProject\`, **not** under
-`C:\gitProject\A2A_Project\`. The `.env` sits outside every git repo on
-purpose — never copy the key into a tracked file.
+All three project checkouts (`a2a-ballerina`, `a2a-interop-tests`, and
+`a2a-resources` for everything else) sit directly under `C:\gitProject\`,
+as siblings. The `.env` is git-ignored in this repo, never tracked.
 
 Existing packages in this repo:
 - `demo/` — the existing low-level interactive demo (`org = anuja_j`,
@@ -97,7 +104,7 @@ This repo consumes `ballerina/a2a` as a real packaged dependency, never
 by copying source. Re-run after **any** library change:
 
 ```bash
-cd "C:\gitProject\A2A_Project\a2a-ballerina\a2a"
+cd "C:\gitProject\a2a-ballerina\a2a"
 bal pack
 bal push --repository=local
 ```
@@ -122,7 +129,7 @@ its own terminal, and three of the four need the Anthropic key:
 | `langgraph` | 10000 | `model_source=anthropic uv run app` |
 | `dice_agent` (Java) | 11000 | `mvn quarkus:dev` |
 
-All under `C:\gitProject\A2A_Project\a2a-samples\samples\...` — venvs and
+All under `C:\gitProject\a2a-resources\a2a-samples\samples\...` — venvs and
 the Java build are already present from previous sessions.
 
 > **Landmine — Quarkus hangs unattended.** `dice_agent`'s dev mode asks an
@@ -691,7 +698,7 @@ trust this list blindly):
 `refactor/unexport-internal-modules`, `test/whole-client-integration`.
 
 ```bash
-cd "C:\gitProject\A2A_Project\a2a-ballerina"
+cd "C:\gitProject\a2a-ballerina"
 git branch -d <name>              # local, once merge is re-confirmed
 git push origin --delete <name>   # remote — ask before doing this part,
                                    # it's a shared-visibility action
