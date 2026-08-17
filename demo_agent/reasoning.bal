@@ -1,5 +1,6 @@
 import ballerina/a2a;
 import ballerina/http;
+import ballerina/io;
 import ballerina/os;
 
 // Anthropic Messages API, called directly over ballerina/http rather than
@@ -14,17 +15,51 @@ const string ANTHROPIC_VERSION = "2023-06-01";
 
 final http:Client anthropicClient = check new (ANTHROPIC_API_BASE);
 
-# Reads the Anthropic API key from the environment. Never hardcoded, never
-# logged.
+// Fixed sibling-checkout location of the .env this whole repo already
+// documents (DEMO_AGENT_PLAN.md §2) -- kept outside every git repo on
+// purpose, so this reads it directly rather than copying the key into
+// tracked source. Absolute, not relative, so this doesn't break depending
+// on which directory `bal run` was launched from.
+const string FALLBACK_ENV_FILE = "C:\\gitProject\\A2A_Project\\.env";
+
+# Reads the Anthropic API key from the environment, falling back to
+# reading it directly out of `FALLBACK_ENV_FILE` if the shell running
+# `bal run` never exported it -- `set`/`$env:` only apply to the terminal
+# session that ran them, so a fresh window loses it every time otherwise.
+# Never hardcoded, never logged.
 #
-# + return - the key, or an actionable error if it isn't set
+# + return - the key, or an actionable error if it can't be found either way
 isolated function anthropicApiKey() returns string|error {
-    string key = os:getEnv("ANTHROPIC_API_KEY");
-    if key == "" {
-        return error("ANTHROPIC_API_KEY is not set. Export it before running demo_agent " +
-                "(see the .env at the A2A_Project root, outside every git repo on purpose).");
+    string envKey = os:getEnv("ANTHROPIC_API_KEY");
+    if envKey != "" {
+        return envKey;
     }
-    return key;
+
+    string|error fileKey = readAnthropicKeyFromEnvFile(FALLBACK_ENV_FILE);
+    if fileKey is string {
+        return fileKey;
+    }
+
+    return error("ANTHROPIC_API_KEY is not set, and couldn't be read from " + FALLBACK_ENV_FILE +
+            " either (" + fileKey.message() + "). Export it in this terminal, or check that file exists.");
+}
+
+# Best-effort read of `ANTHROPIC_API_KEY=...` out of a `.env`-style file.
+#
+# + path - the file to read
+# + return - the key value, or an error if the file or the key is missing
+isolated function readAnthropicKeyFromEnvFile(string path) returns string|error {
+    string[] lines = check io:fileReadLines(path);
+    foreach string line in lines {
+        string trimmed = line.trim();
+        if trimmed.startsWith("ANTHROPIC_API_KEY=") {
+            string value = trimmed.substring("ANTHROPIC_API_KEY=".length());
+            if value != "" {
+                return value;
+            }
+        }
+    }
+    return error("no ANTHROPIC_API_KEY= line found in " + path);
 }
 
 # Makes one call to the Anthropic Messages API with a single user-turn
