@@ -433,7 +433,33 @@ set A2A_DEMO_SERVER_URL=http://localhost:10000
 bal run
 ```
 
-## 6. Suggested demo narrative
+## 6. Run `demo_agent` (the headline demo)
+
+`demo/` above is the raw-protocol walkthrough — a human drives
+`a2a:Client` directly. `demo_agent/` is the actual A2A use case: a real
+agent that decides for itself whether it can answer a question, and if
+not, **discovers** candidate agents (well-known URI, spec §8.2), reasons
+over their declared skills to pick one, delegates over streaming, and
+presents both the remote agent's verbatim reply and its own synthesized
+answer side by side. See `demo_agent/README.md` for the full design.
+
+```bat
+cd demo_agent
+
+:: interactive -- type your own questions, 'quit' to exit
+bal run --sticky
+
+:: scripted -- six fixed scenarios, unattended
+bal run --sticky -- scripted
+```
+
+Needs `ANTHROPIC_API_KEY` set (same key as `adk_currency_agent`/
+`langgraph`, called directly over `ballerina/http` for the reasoning
+steps) and at least one reference agent running to discover and delegate
+to — `dice_agent` plus one currency agent is enough to see skill-based
+routing and a real multi-turn clarification round-trip.
+
+## 7. Suggested demo narrative
 
 If you're presenting this rather than just running it yourself, this order
 tells the actual story:
@@ -476,7 +502,7 @@ tells the actual story:
    a spec-correct card at all, and the open `bal test` runtime blocker
    (§6 there) if asked about current status.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 - **You typed `bal run` inside an agent's directory and got "Invalid
   Ballerina source file"** — every agent is a Python project; use

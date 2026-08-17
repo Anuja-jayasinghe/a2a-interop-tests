@@ -210,6 +210,25 @@ bal run --sticky
 Sends "Can you roll a 6-sided die?" over gRPC, then JSON-RPC, then REST,
 printing each real, independently-generated answer.
 
+**The headline demo -- a real client-side agent** (`demo/` above drives
+`a2a:Client` directly; this one is the actual use case, an agent that
+decides for itself):
+```bat
+cd demo_agent
+bal run --sticky
+```
+Give it a question. It self-assesses whether it can answer locally, and
+if not, discovers candidate agents via the spec's well-known-URI
+mechanism, picks one by reasoning over its declared skills, delegates
+over streaming, and presents both the remote agent's verbatim reply and
+its own synthesized answer, side by side. Needs `ANTHROPIC_API_KEY` set
+and at least one reference agent running. For an unattended run through
+six fixed scenarios instead:
+```bat
+bal run --sticky -- scripted
+```
+See `demo_agent/README.md` for the full design.
+
 ## Phase 7 — Troubleshooting
 
 - **`IllegalAccessError: class ballerina.grpc.1.log_manager tried to

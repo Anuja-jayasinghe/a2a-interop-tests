@@ -1,0 +1,21 @@
+[package]
+org = "anuja_j"
+name = "a2a_demo_agent"
+version = "0.1.0"
+distribution = "2201.13.4"
+
+[build-options]
+observabilityIncluded = true
+
+[[dependency]]
+org = "ballerina"
+name = "a2a"
+version = "0.2.0"
+repository = "local"
+
+# See http_version_pin.bal -- this pin is silently ignored without a
+# direct http import in the package.
+[[dependency]]
+org = "ballerina"
+name = "http"
+version = "2.14.13"

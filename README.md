@@ -30,7 +30,13 @@ run against real third-party A2A servers rather than mocks.
 - `tests/` — the interop test suite (Ballerina project at repo root),
   run with a real server via `A2A_TEST_SERVER_URL`.
 - `demo/` — an interactive, watchable walkthrough of the `Client` against
-  a real server (own Ballerina project).
+  a real server (own Ballerina project). The raw-protocol view: a human
+  drives `a2a:Client` directly.
+- `demo_agent/` — the headline demo: a real client-side A2A agent that
+  reasons about a question, discovers and selects another agent via the
+  spec's own mechanism, delegates to it, and presents both the remote
+  reply and its own synthesized answer (own Ballerina project, see
+  `demo_agent/README.md`).
 - `servers/<agent>/` — per-agent `setup.md` (how to run it) and
   `findings.md` (spec non-conformances found, and how the client works
   around them).
