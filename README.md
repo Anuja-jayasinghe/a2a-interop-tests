@@ -8,7 +8,7 @@ run against real third-party A2A servers rather than mocks.
 - **`a2a-ballerina`** — the library itself. This repo consumes
   `ballerina/a2a` as a real external package, published to the local
   Ballerina package repository (`bal pack && bal push
-  --repository=local` from `a2a-ballerina/a2a`), not by copying or
+  --repository=local` from `a2a-ballerina`), not by copying or
   importing its source. That's deliberate: if the interop tests or demo
   can't run against a packed, external `ballerina/a2a`, that's itself a
   finding about the library's public API.

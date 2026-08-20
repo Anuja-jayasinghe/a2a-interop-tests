@@ -85,7 +85,7 @@ This repo consumes `ballerina/a2a` as a real external package dependency
 time the library changes, repeat this step:
 
 ```bat
-cd C:\gitProject\a2a-ballerina\a2a
+cd C:\gitProject\a2a-ballerina
 bal pack
 bal push --repository=local
 ```

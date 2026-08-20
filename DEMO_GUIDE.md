@@ -79,7 +79,7 @@ and republish it to the local Ballerina package repository so this repo
 picks up the change:
 
 ```bat
-cd path\to\a2a-ballerina\a2a
+cd path\to\a2a-ballerina
 bal pack
 bal push --repository=local
 ```

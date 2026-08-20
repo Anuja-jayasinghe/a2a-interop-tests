@@ -64,7 +64,7 @@ Three sibling checkouts. **None is nested inside another.**
 
 | What | Absolute path |
 | :--- | :--- |
-| The library (`ballerina/a2a`) | `C:\gitProject\a2a-ballerina\a2a` |
+| The library (`ballerina/a2a`) | `C:\gitProject\a2a-ballerina` |
 | Upstream reference agents | `C:\gitProject\a2a-resources\a2a-samples` |
 | **This repo** (`a2a-interop-tests`) | `C:\gitProject\a2a-interop-tests` |
 | Pinned A2A spec v1.0.0 | `C:\gitProject\a2a-resources\a2a-tck\specification\specification.md` |
@@ -104,7 +104,7 @@ This repo consumes `ballerina/a2a` as a real packaged dependency, never
 by copying source. Re-run after **any** library change:
 
 ```bash
-cd "C:\gitProject\a2a-ballerina\a2a"
+cd "C:\gitProject\a2a-ballerina"
 bal pack
 bal push --repository=local
 ```

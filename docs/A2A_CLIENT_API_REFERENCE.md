@@ -1,7 +1,7 @@
 # `ballerina/a2a` Client API Reference
 
 Complete list of every public discovery function and `Client` operation in
-`ballerina/a2a` (`C:\gitProject\a2a-ballerina\a2a\client.bal`),
+`ballerina/a2a` (`C:\gitProject\a2a-ballerina\client.bal`),
 with exact signatures, wire mappings, and the constraints each operation
 enforces. Companion to
 [`A2A_CLIENT_LISTENER_LIFECYCLE.md`](./A2A_CLIENT_LISTENER_LIFECYCLE.md) (how
