@@ -510,6 +510,7 @@ half they could *join* it.
 - [A2A Protocol: The Definitive Agent-to-Agent Guide (Tyk)](https://tyk.io/learning-center/a2a-protocol-architecture-and-technical-specification/)
 - [Multi-Agent Coordination Patterns (Atlan)](https://atlan.com/know/multi-agent-coordination-patterns/)
 - In-repo: [`docs/A2A_CLIENT_LISTENER_LIFECYCLE.md`](./A2A_CLIENT_LISTENER_LIFECYCLE.md),
-  `a2a-ballerina/a2a/README.md` (status + roadmap),
-  `a2a-ballerina/a2a/docs/A2A_Technical_Design.md` §12.2 (deferred Phase 2),
+  `a2a-ballerina/README.md` (status + roadmap),
+  [`docs/a2a-ballerina-design/A2A_Technical_Design.md`](./a2a-ballerina-design/A2A_Technical_Design.md)
+  §12.2 (deferred Phase 2; moved into this repo from `a2a-ballerina/docs/`),
   `servers/dice_agent/findings.md` (TCK experience).

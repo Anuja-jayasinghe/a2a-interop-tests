@@ -51,7 +51,7 @@ held for review before merging, no exceptions.
 
 ## 2. `a2a-ballerina` — the library
 
-Root: `C:\gitProject\A2A_Project\a2a-ballerina`. The actual Ballerina
+Root: `C:\gitProject\a2a-ballerina`. The actual Ballerina
 package lives in the `a2a/` subdirectory.
 
 | Path | What it is |

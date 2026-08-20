@@ -239,7 +239,8 @@ current phase (roadmap item: `a2a:Listener` + service-object contract,
 not started). There is no `Service` type, no `Listener` class, no
 `service.bal` in the package — confirmed by inspection, not inferred.
 An old superseded design draft
-(`a2a-ballerina/a2a/docs/archive/A2A_Technical_Design_superseded_listener_draft.md`)
+([`docs/a2a-ballerina-design/archive/A2A_Technical_Design_superseded_listener_draft.md`](./a2a-ballerina-design/archive/A2A_Technical_Design_superseded_listener_draft.md),
+in this repo — moved from `a2a-ballerina/docs/archive/`)
 sketches what one *might* look like (`listener a2a:Listener` +
 `service /a2a on a2aEp { remote function onTask(...) {...} }`, a
 `TaskStore`, an SSE push loop that `break`s on a terminal

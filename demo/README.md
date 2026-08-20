@@ -7,11 +7,11 @@ a real A2A server. Not a test suite — this is for watching it work.
 
 `demo` consumes `ballerina/a2a` from the local Ballerina package
 repository, not a copy of the source. If the local `a2a` package isn't
-already published there (or you've since changed `a2a-ballerina/a2a` and
+already published there (or you've since changed `a2a-ballerina` and
 want the demo to pick up the change), rebuild and republish it first:
 
 ```bash
-cd ../../A2A_Project/a2a-ballerina/a2a
+cd ../../a2a-ballerina
 bal pack
 bal push --repository=local
 ```

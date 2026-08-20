@@ -62,12 +62,18 @@ new session, or add to your profile if you'll use this regularly.)
 
 `ballerina/a2a` (the library), `a2a-samples` (upstream reference agents,
 not vendored), and `a2a-interop-tests` (this repo) are three separate
-checkouts that reference each other by relative expectation, not by
-nesting. Put them side by side:
+checkouts. `a2a-ballerina` sits top-level, a sibling of `a2a-interop-tests`;
+`a2a-samples` and everything else that isn't part of either project
+(toolchain, spec checkout, one-off scratch tools) lives under a third
+folder, `a2a-resources`, kept separate so it doesn't clutter either repo:
 
 ```bat
-mkdir C:\gitProject\A2A_Project & cd C:\gitProject\A2A_Project
+:: the library -- top-level, sibling to a2a-interop-tests
+cd C:\gitProject
 git clone <your-a2a-ballerina-repo-url> a2a-ballerina
+
+:: everything else -- reference agents, toolchain, spec checkout
+mkdir C:\gitProject\a2a-resources & cd C:\gitProject\a2a-resources
 git clone https://github.com/a2aproject/a2a-samples.git
 :: a2a-interop-tests is presumably already checked out if you're reading this file
 ```
@@ -79,7 +85,7 @@ This repo consumes `ballerina/a2a` as a real external package dependency
 time the library changes, repeat this step:
 
 ```bat
-cd C:\gitProject\A2A_Project\a2a-ballerina\a2a
+cd C:\gitProject\a2a-ballerina
 bal pack
 bal push --repository=local
 ```
@@ -93,7 +99,7 @@ of this walkthrough. Full per-agent reasoning and troubleshooting:
 ### 4a. `helloworld` — no credentials, fastest sanity check
 
 ```bat
-cd C:\gitProject\A2A_Project\a2a-samples\samples\python\agents\helloworld
+cd C:\gitProject\a2a-resources\a2a-samples\samples\python\agents\helloworld
 python -m venv .venv
 .venv\Scripts\activate.bat
 pip install -r requirements.txt
@@ -104,7 +110,7 @@ Listens on `http://127.0.0.1:9999`. Verify: `curl http://127.0.0.1:9999/.well-kn
 ### 4b. `adk_currency_agent` — Google ADK, on Claude
 
 ```bat
-cd C:\gitProject\A2A_Project\a2a-samples\samples\python\agents\adk_currency_agent
+cd C:\gitProject\a2a-resources\a2a-samples\samples\python\agents\adk_currency_agent
 uv sync
 set ANTHROPIC_API_KEY=sk-ant-...
 uv run currency_agent
@@ -117,7 +123,7 @@ Verify: `curl http://localhost:10999/.well-known/agent-card.json`
 ### 4c. `langgraph` currency agent — richest agent, on Claude
 
 ```bat
-cd C:\gitProject\A2A_Project\a2a-samples\samples\python\agents\langgraph
+cd C:\gitProject\a2a-resources\a2a-samples\samples\python\agents\langgraph
 uv sync
 set model_source=anthropic
 set ANTHROPIC_API_KEY=sk-ant-...
@@ -131,7 +137,7 @@ Verify: `curl http://localhost:10000/.well-known/agent-card.json`
 ### 4d. `dice_agent` — Java/Quarkus, the only REST+gRPC-serving agent, on Claude
 
 ```bat
-cd C:\gitProject\A2A_Project\a2a-samples\samples\java\agents\dice_agent_multi_transport\server
+cd C:\gitProject\a2a-resources\a2a-samples\samples\java\agents\dice_agent_multi_transport\server
 set ANTHROPIC_API_KEY=sk-ant-...
 mvn quarkus:dev
 ```
